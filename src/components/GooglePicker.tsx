@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-
+import { host } from "../config";
 const GooglePicker = ({ onFileSelect }) => {
   const { user } = useAuth();
   const [pickerApiLoaded, setPickerApiLoaded] = useState(false);
@@ -71,7 +71,7 @@ const GooglePicker = ({ onFileSelect }) => {
   async function fetchDecryptedToken() {
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/classroom/access_token?email=${user?.email}`,
+        `${host}/classroom/access_token?email=${user?.email}`,
         {
           method: "GET",
           headers: {

@@ -15,7 +15,7 @@ interface Assignment {
   due_date: string;
   max_points: number;
 }
-
+const host = "https://crex-gclass-backend-29d64edfb6e9.herokuapp.com/";
 const Assignments = ({ courseId, onAssignmentSelect }) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,7 +34,7 @@ const Assignments = ({ courseId, onAssignmentSelect }) => {
     if (courseId) {
       setLoading(true);
       fetch(
-        `http://127.0.0.1:8000/classroom/assignments?email=${user?.email}&course_id=${courseId}`
+        `${host}/classroom/assignments?email=${user?.email}&course_id=${courseId}`
       )
         .then((res) => {
           if (!res.ok) {

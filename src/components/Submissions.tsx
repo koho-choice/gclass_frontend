@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import GooglePicker from "./GooglePicker";
-
+import { host } from "../config";
 interface SubmissionsProps {
   courseId: string;
   assignmentId: string;
@@ -159,7 +159,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
     try {
       for (const submissionId of submissionsToGrade) {
         const response = await fetch(
-          `http://127.0.0.1:8000/classroom/grade_submission?email=${user?.email}&assignment_id=${assignmentId}&course_id=${courseId}`,
+          `${host}/classroom/grade_submission?email=${user?.email}&assignment_id=${assignmentId}&course_id=${courseId}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -194,9 +194,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const pollGradingStatus = async (submissionId: string, taskId: string) => {
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(
-          `http://127.0.0.1:8000/classroom/task_status/${taskId}`
-        );
+        const response = await fetch(`${host}/classroom/task_status/${taskId}`);
         if (!response.ok) throw new Error("Failed to check grading status");
 
         const { status } = await response.json();
@@ -253,7 +251,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const fetchGradingResults = async (submissionId: string) => {
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/classroom/graded_submissions?submission_id=${submissionId}`
+        `${host}/classroom/graded_submissions?submission_id=${submissionId}`
       );
       if (!response.ok) throw new Error("Failed to fetch grading results");
 
@@ -306,7 +304,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
       try {
         setLoading(true);
         const response = await fetch(
-          `http://127.0.0.1:8000/classroom/submissions?email=${user?.email}&course_id=${courseId}&assignment_id=${assignmentId}`
+          `${host}/classroom/submissions?email=${user?.email}&course_id=${courseId}&assignment_id=${assignmentId}`
         );
         if (!response.ok) throw new Error(`Error: ${response.statusText}`);
         const data = await response.json();

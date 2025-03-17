@@ -1,14 +1,14 @@
 import { useGoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../context/AuthContext";
 import { LogIn } from "lucide-react";
-
+import { host } from "../config";
 const Login = () => {
   const { setIsAuthenticated, setUser } = useAuth();
 
   const handleLoginSuccess = async (codeResponse: any) => {
     console.log("Authorization Code:", codeResponse.code);
     try {
-      const res = await fetch("http://127.0.0.1:8000/auth/google/code", {
+      const res = await fetch(`${host}/auth/google/code`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
