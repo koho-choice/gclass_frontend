@@ -8,7 +8,7 @@ interface Course {
   section: string;
   room: string;
 }
-
+import { host } from "../config";
 const Courses = ({ onCourseSelect }) => {
   const { isAuthenticated, user } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -18,7 +18,7 @@ const Courses = ({ onCourseSelect }) => {
   useEffect(() => {
     if (isAuthenticated && user) {
       setLoading(true);
-      fetch(`http://127.0.0.1:8000/classroom/courses?email=${user.email}`)
+      fetch(`${host}/classroom/courses?email=${user.email}`)
         .then((res) => {
           if (!res.ok) throw new Error(`Error: ${res.statusText}`);
           return res.json();
