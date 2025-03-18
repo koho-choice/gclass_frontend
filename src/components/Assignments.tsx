@@ -15,7 +15,7 @@ interface Assignment {
   due_date: string;
   max_points: number;
 }
-const host = "https://crex-gclass-backend-29d64edfb6e9.herokuapp.com/";
+import { host } from "../config";
 const Assignments = ({ courseId, onAssignmentSelect }) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(false);
