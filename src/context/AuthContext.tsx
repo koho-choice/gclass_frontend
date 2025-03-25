@@ -1,5 +1,11 @@
 // AuthContext.tsx
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useEffect,
+} from "react";
 // Define the shape of the user object
 interface User {
   name: string;
@@ -19,9 +25,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // AuthProvider component to wrap around parts of the app that need access to authentication state
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // State to track if the user is authenticated
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<User | undefined>(undefined);
+  // Initialize state from localStorage
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem("isAuthenticated") === "true";
+  });
+
+  const [user, setUser] = useState<User | undefined>(() => {
+    const savedUser = localStorage.getItem("user");
+    return savedUser ? JSON.parse(savedUser) : undefined;
+  });
+
+  // Update localStorage when auth state changes
+  useEffect(() => {
+    localStorage.setItem("isAuthenticated", isAuthenticated.toString());
+  }, [isAuthenticated]);
+
+  // Update localStorage when user data changes
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem("user", JSON.stringify(user));
+    } else {
+      localStorage.removeItem("user");
+    }
+  }, [user]);
+
   return (
     // Provide the authentication state and setter function to the context
     <AuthContext.Provider
