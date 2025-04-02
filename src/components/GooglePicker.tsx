@@ -30,7 +30,7 @@ const GooglePicker = ({ onFileSelect }) => {
         window.google.picker.ViewId.DOCS
       )
         .setMimeTypes(
-          "application/pdf,application/vnd.google-apps.spreadsheet,application/vnd.google-apps.document"
+          "application/pdf,application/vnd.google-apps.spreadsheet,application/vnd.google-apps.document,application/json"
         )
         .setLabel("Select Rubric");
 
