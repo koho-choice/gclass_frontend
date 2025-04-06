@@ -77,7 +77,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
     string | null
   >(null);
   const [rubricText, setRubricText] = useState<string>("");
-  const [rubricData, setRubricData] = useState<any>(null);
+  const [rubricData, setRubricData] = useState<string | null>(null);
   const [rubricGenerationStarted, setRubricGenerationStarted] = useState(false);
 
   const formatDate = (dateString: string) => {
@@ -145,6 +145,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const handleFileSelect = (fileId: string) => {
     console.log("Selected rubric file ID:", fileId);
     setSelectedRubricFileId(fileId);
+    setRubricData(fileId);
   };
 
   const handleRubricTextChange = (
@@ -170,7 +171,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        setRubricData(data);
+        setRubricData(data.rubric);
         setRubricPreview(data.rubric);
         setShowRubricPreview(true);
       } else {
@@ -184,7 +185,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const initiateGrading = async () => {
     if (
       selectedSubmissions.size === 0 ||
-      (!selectedRubricFileId && !rubricText)
+      (!selectedRubricFileId && !rubricData)
     )
       return;
 
@@ -199,8 +200,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
           courseId,
           assignmentId,
           submissionIds: [submissionId],
-          rubric: selectedRubricFileId,
-          rubricText,
+          rubric: rubricData,
         });
 
         setSubmissionsData((prev) => ({
@@ -318,6 +318,49 @@ const Submissions: React.FC<SubmissionsProps> = ({
     XLSX.writeFile(workbook, "Submissions.xlsx");
   };
 
+  const exportToCSV = () => {
+    const assignmentName = submissionsData.assignment_name;
+    const firstSubmissionId = submissionsData.submissions[0]?.submission_id;
+    const pointsPossible = firstSubmissionId
+      ? gradingResults.get(firstSubmissionId)?.points_possible || 0
+      : 0;
+    const data = [
+      {
+        Student: "Points Possible",
+        ID: "",
+        "SIS User ID": "",
+        "SIS Login ID": "",
+        Section: "",
+        [assignmentName]: pointsPossible,
+      },
+      ...submissionsData.submissions.map((submission) => {
+        const pointsReceived =
+          gradingResults.get(submission.submission_id)?.points_received || 0;
+        return {
+          Student: submission.student_name,
+          ID: "",
+          "SIS User ID": "",
+          "SIS Login ID": "",
+          Section: "",
+          [assignmentName]: pointsReceived,
+        };
+      }),
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const csvContent = XLSX.utils.sheet_to_csv(worksheet);
+
+    // Create a blob and download the CSV file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "Submissions.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSubmissionClick = (submissionId: string) => {
     console.log("Submission clicked:", submissionId);
     setSelectedSubmissionId(submissionId);
@@ -429,18 +472,18 @@ const Submissions: React.FC<SubmissionsProps> = ({
           <button
             onClick={initiateGrading}
             disabled={
-              gradingInProgress || (!selectedRubricFileId && !rubricText)
+              gradingInProgress || (!selectedRubricFileId && !rubricData)
             }
             className={`inline-flex items-center px-4 py-2 rounded-lg text-white font-medium text-sm transition-colors
               ${
-                gradingInProgress || (!selectedRubricFileId && !rubricText)
+                gradingInProgress || (!selectedRubricFileId && !rubricData)
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-indigo-600 hover:bg-indigo-700"
               }`}
             aria-label={
               gradingInProgress
                 ? "Grading in progress"
-                : !selectedRubricFileId && !rubricText
+                : !selectedRubricFileId && !rubricData
                 ? "Select a rubric file or enter rubric text to enable grading"
                 : `Grade ${selectedSubmissions.size} selected submissions`
             }
@@ -465,10 +508,10 @@ const Submissions: React.FC<SubmissionsProps> = ({
           ) && (
             <div className="flex flex-col items-center">
               <button
-                onClick={exportToExcel}
+                onClick={exportToCSV}
                 className="inline-flex items-center px-4 py-2 rounded-lg bg-green-600 text-white font-medium text-sm hover:bg-green-700 transition-colors"
               >
-                Export to Excel
+                Export to CSV
               </button>
               <p className="mt-2 text-sm text-gray-600">
                 Specially prepared file for your LMS (Schoology or Canvas).
@@ -716,7 +759,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
         {rubricGenerationStarted && !rubricData ? (
           <p>Loading rubric...</p>
         ) : (
-          rubricData && renderRubricTable(rubricData.rubric)
+          rubricData && renderRubricTable(rubricData)
         )}
       </div>
     </div>
