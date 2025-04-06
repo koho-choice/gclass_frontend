@@ -57,6 +57,9 @@ function App() {
 
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
+  const [rubricPreview, setRubricPreview] = useState<string | null>(null);
+  const [showRubricPreview, setShowRubricPreview] = useState<boolean>(false);
+
   const handleLogout = () => {
     setIsAuthenticated(false);
     setGradingStatus("pending");
@@ -138,6 +141,8 @@ function App() {
                   <Submissions
                     courseId={selectedCourseId}
                     assignmentId={selectedAssignmentId}
+                    setRubricPreview={setRubricPreview}
+                    setShowRubricPreview={setShowRubricPreview}
                   />
                 )}
 

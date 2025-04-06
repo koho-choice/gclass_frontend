@@ -1,28 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { GraduationCap, Users, MapPin, ChevronRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { Course } from "../../services/common";
+import { PlatformServiceFactory } from "../../services/PlatformServiceFactory";
 
-interface Course {
-  id: number;
-  name: string;
-  section: string;
-  room: string;
-}
-import { host } from "../config";
 const Courses = ({ onCourseSelect }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, platform } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && user && platform) {
       setLoading(true);
-      fetch(`${host}/classroom/courses?email=${user.email}`)
-        .then((res) => {
-          if (!res.ok) throw new Error(`Error: ${res.statusText}`);
-          return res.json();
-        })
+      const service = PlatformServiceFactory.getInstance().getService(platform);
+
+      service
+        .getCourses(user.email)
         .then((data) => {
           setCourses(data.courses);
           setLoading(false);
@@ -32,7 +26,7 @@ const Courses = ({ onCourseSelect }) => {
           setLoading(false);
         });
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, platform]);
 
   if (loading) {
     return (

@@ -6,6 +6,10 @@ import React, {
   ReactNode,
   useEffect,
 } from "react";
+
+// Define platform type
+export type Platform = "classroom" | "canvas" | undefined;
+
 // Define the shape of the user object
 interface User {
   name: string;
@@ -18,6 +22,8 @@ interface AuthContextType {
   setIsAuthenticated: (value: boolean) => void;
   user?: User;
   setUser: (user: User | undefined) => void;
+  platform?: Platform;
+  setPlatform: (platform: Platform) => void;
 }
 
 // Create the authentication context with an undefined default value
@@ -35,6 +41,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return savedUser ? JSON.parse(savedUser) : undefined;
   });
 
+  // Add platform state
+  const [platform, setPlatform] = useState<Platform>(() => {
+    return (localStorage.getItem("platform") as Platform) || undefined;
+  });
+
   // Update localStorage when auth state changes
   useEffect(() => {
     localStorage.setItem("isAuthenticated", isAuthenticated.toString());
@@ -49,10 +60,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user]);
 
+  // Update localStorage when platform changes
+  useEffect(() => {
+    if (platform) {
+      localStorage.setItem("platform", platform);
+    } else {
+      localStorage.removeItem("platform");
+    }
+  }, [platform]);
+
   return (
     // Provide the authentication state and setter function to the context
     <AuthContext.Provider
-      value={{ isAuthenticated, setIsAuthenticated, user, setUser }}
+      value={{
+        isAuthenticated,
+        setIsAuthenticated,
+        user,
+        setUser,
+        platform,
+        setPlatform,
+      }}
     >
       {children}
     </AuthContext.Provider>

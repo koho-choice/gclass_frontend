@@ -22,29 +22,23 @@ import {
 import * as XLSX from "xlsx";
 import GooglePicker from "./GooglePicker";
 import { host } from "../config";
+import { PlatformServiceFactory } from "../../services/PlatformServiceFactory";
+import { Submission } from "../../services/common";
+
 interface SubmissionsProps {
   courseId: string;
   assignmentId: string;
-}
-
-interface Submission {
-  student_name: string;
-  student_email: string;
-  submission_id: string;
-  submission_title: string;
-  submission_link: string;
-  submission_date: string;
-  submission_status: string;
-  submission_score: string | number;
-  grading_status?: "pending" | "in_progress" | "completed";
-  task_id?: string;
+  setRubricPreview: React.Dispatch<React.SetStateAction<string | null>>;
+  setShowRubricPreview: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const Submissions: React.FC<SubmissionsProps> = ({
   courseId,
   assignmentId,
+  setRubricPreview,
+  setShowRubricPreview,
 }) => {
-  const { user } = useAuth();
+  const { user, platform } = useAuth();
   const [submissionsData, setSubmissionsData] = useState<{
     assignment_name: string;
     submissions: Submission[];
@@ -82,6 +76,9 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const [selectedRubricFileId, setSelectedRubricFileId] = useState<
     string | null
   >(null);
+  const [rubricText, setRubricText] = useState<string>("");
+  const [rubricData, setRubricData] = useState<any>(null);
+  const [rubricGenerationStarted, setRubricGenerationStarted] = useState(false);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -150,29 +147,61 @@ const Submissions: React.FC<SubmissionsProps> = ({
     setSelectedRubricFileId(fileId);
   };
 
+  const handleRubricTextChange = (
+    e: React.ChangeEvent<HTMLTextAreaElement>
+  ) => {
+    setRubricText(e.target.value);
+  };
+
+  const generateRubricPreview = async () => {
+    if (!rubricText) return;
+
+    setRubricGenerationStarted(true);
+
+    try {
+      // Fetch rubric preview
+      const response = await fetch(`${host}/api/generate_rubric_preview`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prompt: rubricText }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRubricData(data);
+        setRubricPreview(data.rubric);
+        setShowRubricPreview(true);
+      } else {
+        console.error("Failed to generate rubric preview");
+      }
+    } catch (error) {
+      console.error("Error generating rubric preview:", error);
+    }
+  };
+
   const initiateGrading = async () => {
-    if (selectedSubmissions.size === 0 || !selectedRubricFileId) return;
+    if (
+      selectedSubmissions.size === 0 ||
+      (!selectedRubricFileId && !rubricText)
+    )
+      return;
 
     setGradingInProgress(true);
     const submissionsToGrade = Array.from(selectedSubmissions);
 
     try {
+      const service = PlatformServiceFactory.getInstance().getService(platform);
       for (const submissionId of submissionsToGrade) {
-        const response = await fetch(
-          `${host}/classroom/grade_submission?email=${user?.email}&assignment_id=${assignmentId}&course_id=${courseId}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              submission_ids: [submissionId],
-              rubric: selectedRubricFileId,
-            }),
-          }
-        );
-
-        if (!response.ok) throw new Error("Failed to initiate grading");
-
-        const { task_id } = await response.json();
+        const { task_id } = await service.gradeSubmission({
+          email: user?.email,
+          courseId,
+          assignmentId,
+          submissionIds: [submissionId],
+          rubric: selectedRubricFileId,
+          rubricText,
+        });
 
         setSubmissionsData((prev) => ({
           ...prev,
@@ -194,10 +223,9 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const pollGradingStatus = async (submissionId: string, taskId: string) => {
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`${host}/classroom/task_status/${taskId}`);
-        if (!response.ok) throw new Error("Failed to check grading status");
-
-        const { status } = await response.json();
+        const service =
+          PlatformServiceFactory.getInstance().getService(platform);
+        const { status } = await service.getTaskStatus(taskId);
 
         if (status.includes("completed")) {
           clearInterval(pollInterval);
@@ -250,14 +278,13 @@ const Submissions: React.FC<SubmissionsProps> = ({
 
   const fetchGradingResults = async (submissionId: string) => {
     try {
-      const response = await fetch(
-        `${host}/classroom/graded_submissions?submission_id=${submissionId}`
+      const service = PlatformServiceFactory.getInstance().getService(platform);
+      const { latest_graded_submission } = await service.getGradedSubmission(
+        submissionId
       );
-      if (!response.ok) throw new Error("Failed to fetch grading results");
 
-      const data = await response.json();
       setGradingResults((prev) =>
-        new Map(prev).set(submissionId, data.latest_graded_submission)
+        new Map(prev).set(submissionId, latest_graded_submission)
       );
 
       setSubmissionsData((prev) => ({
@@ -267,8 +294,8 @@ const Submissions: React.FC<SubmissionsProps> = ({
             ? {
                 ...sub,
                 submission_score: `${
-                  data.latest_graded_submission.points_received || 0
-                }/${data.latest_graded_submission.points_possible || 0}`,
+                  latest_graded_submission.points_received || 0
+                }/${latest_graded_submission.points_possible || 0}`,
               }
             : sub
         ),
@@ -297,30 +324,64 @@ const Submissions: React.FC<SubmissionsProps> = ({
     setShowPicker(true);
     console.log("showPicker set to true");
   };
-  // Assume fileId is the selected file ID from the Picker
+
+  const renderRubricTable = (rubricDataStr: string) => {
+    let rubricData;
+    try {
+      rubricData = JSON.parse(rubricDataStr);
+    } catch (error) {
+      console.error("Failed to parse rubric data:", error);
+      return <p>Error parsing rubric data</p>;
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <h3 className="text-lg font-bold mb-4">{rubricData.title}</h3>
+        <p className="mb-4">{rubricData.description}</p>
+        {rubricData.criteria.map((criterion: any, index: number) => (
+          <div key={index} className="mb-6">
+            <h4 className="text-md font-semibold mb-2">{criterion.name}</h4>
+            <table className="min-w-full bg-white border border-gray-200">
+              <thead>
+                <tr>
+                  <th className="py-2 px-4 border-b">Level</th>
+                  <th className="py-2 px-4 border-b">Points</th>
+                  <th className="py-2 px-4 border-b">Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {criterion.levels.map((level: any, levelIndex: number) => (
+                  <tr key={levelIndex} className="hover:bg-gray-100">
+                    <td className="py-2 px-4 border-b">{level.label}</td>
+                    <td className="py-2 px-4 border-b">{level.points}</td>
+                    <td className="py-2 px-4 border-b">{level.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   useEffect(() => {
-    const fetchSubmissions = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(
-          `${host}/classroom/submissions?email=${user?.email}&course_id=${courseId}&assignment_id=${assignmentId}`
-        );
-        if (!response.ok) throw new Error(`Error: ${response.statusText}`);
-        const data = await response.json();
-        setSubmissionsData(data);
-      } catch (error) {
-        console.error("Error fetching submissions:", error);
-        setError("Failed to load submissions. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (platform && user) {
+      const service = PlatformServiceFactory.getInstance().getService(platform);
+      setLoading(true);
 
-    if (courseId && assignmentId) {
-      fetchSubmissions();
+      service
+        .getSubmissions(courseId, assignmentId, user.email)
+        .then((data) => {
+          setSubmissionsData(data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          setError(err.message);
+          setLoading(false);
+        });
     }
-  }, [courseId, assignmentId, user?.email]);
+  }, [courseId, assignmentId, platform, user]);
 
   if (loading) {
     return (
@@ -367,18 +428,20 @@ const Submissions: React.FC<SubmissionsProps> = ({
         {selectedSubmissions.size > 0 && (
           <button
             onClick={initiateGrading}
-            disabled={gradingInProgress || !selectedRubricFileId}
+            disabled={
+              gradingInProgress || (!selectedRubricFileId && !rubricText)
+            }
             className={`inline-flex items-center px-4 py-2 rounded-lg text-white font-medium text-sm transition-colors
               ${
-                gradingInProgress || !selectedRubricFileId
+                gradingInProgress || (!selectedRubricFileId && !rubricText)
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-indigo-600 hover:bg-indigo-700"
               }`}
             aria-label={
               gradingInProgress
                 ? "Grading in progress"
-                : !selectedRubricFileId
-                ? "Select a rubric file to enable grading"
+                : !selectedRubricFileId && !rubricText
+                ? "Select a rubric file or enter rubric text to enable grading"
                 : `Grade ${selectedSubmissions.size} selected submissions`
             }
           >
@@ -637,6 +700,25 @@ const Submissions: React.FC<SubmissionsProps> = ({
           <GooglePicker onFileSelect={handleFileSelect} />
         </div>
       )}
+      <textarea
+        value={rubricText}
+        onChange={handleRubricTextChange}
+        placeholder="Enter your assignment prompt if you'd like to generate a rubric"
+        className="w-full p-2 border rounded"
+      />
+      <button
+        onClick={generateRubricPreview}
+        className="mt-2 px-4 py-2 bg-blue-600 text-white rounded"
+      >
+        Generate Rubric Preview
+      </button>
+      <div className="mt-6">
+        {rubricGenerationStarted && !rubricData ? (
+          <p>Loading rubric...</p>
+        ) : (
+          rubricData && renderRubricTable(rubricData.rubric)
+        )}
+      </div>
     </div>
   );
 };

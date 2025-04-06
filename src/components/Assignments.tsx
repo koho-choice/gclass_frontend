@@ -8,19 +8,14 @@ import {
   ChevronRight,
   RefreshCw,
 } from "lucide-react";
+import { Assignment } from "../../services/common";
+import { PlatformServiceFactory } from "../../services/PlatformServiceFactory";
 
-interface Assignment {
-  id: string;
-  title: string;
-  due_date: string;
-  max_points: number;
-}
-import { host } from "../config";
 const Assignments = ({ courseId, onAssignmentSelect }) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const { user } = useAuth();
+  const { user, platform } = useAuth();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -31,17 +26,12 @@ const Assignments = ({ courseId, onAssignmentSelect }) => {
   };
 
   useEffect(() => {
-    if (courseId) {
+    if (courseId && platform) {
       setLoading(true);
-      fetch(
-        `${host}/classroom/assignments?email=${user?.email}&course_id=${courseId}`
-      )
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error(`Error: ${res.statusText}`);
-          }
-          return res.json();
-        })
+      const service = PlatformServiceFactory.getInstance().getService(platform);
+
+      service
+        .getAssignments(courseId, user?.email)
         .then((data) => {
           setAssignments(data.assignments);
           setLoading(false);
@@ -51,7 +41,7 @@ const Assignments = ({ courseId, onAssignmentSelect }) => {
           setLoading(false);
         });
     }
-  }, [courseId]);
+  }, [courseId, user?.email, platform]);
 
   if (loading) {
     return (
