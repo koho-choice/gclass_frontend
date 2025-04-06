@@ -324,7 +324,34 @@ const Submissions: React.FC<SubmissionsProps> = ({
     const pointsPossible = firstSubmissionId
       ? gradingResults.get(firstSubmissionId)?.points_possible || 0
       : 0;
-    const data = [
+
+    // Data for the first CSV: Student Name and Feedback
+    const feedbackData = submissionsData.submissions.map((submission) => {
+      const feedback =
+        gradingResults.get(submission.submission_id)?.explanation || "";
+      return {
+        Student: submission.student_name,
+        Feedback: feedback,
+      };
+    });
+
+    const feedbackWorksheet = XLSX.utils.json_to_sheet(feedbackData);
+    const feedbackCSVContent = XLSX.utils.sheet_to_csv(feedbackWorksheet);
+
+    // Create a blob and download the first CSV file
+    const feedbackBlob = new Blob([feedbackCSVContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const feedbackUrl = URL.createObjectURL(feedbackBlob);
+    const feedbackLink = document.createElement("a");
+    feedbackLink.href = feedbackUrl;
+    feedbackLink.setAttribute("download", "StudentFeedback.csv");
+    document.body.appendChild(feedbackLink);
+    feedbackLink.click();
+    document.body.removeChild(feedbackLink);
+
+    // Data for the second CSV: Other Information
+    const otherData = [
       {
         Student: "Points Possible",
         ID: "",
@@ -347,18 +374,20 @@ const Submissions: React.FC<SubmissionsProps> = ({
       }),
     ];
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const csvContent = XLSX.utils.sheet_to_csv(worksheet);
+    const otherWorksheet = XLSX.utils.json_to_sheet(otherData);
+    const otherCSVContent = XLSX.utils.sheet_to_csv(otherWorksheet);
 
-    // Create a blob and download the CSV file
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "Submissions.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Create a blob and download the second CSV file
+    const otherBlob = new Blob([otherCSVContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const otherUrl = URL.createObjectURL(otherBlob);
+    const otherLink = document.createElement("a");
+    otherLink.href = otherUrl;
+    otherLink.setAttribute("download", "SubmissionsInfo.csv");
+    document.body.appendChild(otherLink);
+    otherLink.click();
+    document.body.removeChild(otherLink);
   };
 
   const handleSubmissionClick = (submissionId: string) => {
