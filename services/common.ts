@@ -28,7 +28,16 @@ export interface Submission {
 
 // Service interface that matches your current API calls
 export interface PlatformService {
-  getCourses: (email?: string) => Promise<{ courses: Course[] }>;
+  getCourses: (
+    email?: string,
+    page?: number,
+    perPage?: number
+  ) => Promise<{
+    courses: Course[];
+    page: number;
+    per_page: number;
+    total_courses: number;
+  }>;
   getAssignments: (
     courseId: string,
     email?: string
@@ -58,4 +67,10 @@ export interface PlatformService {
       graded_at: string;
     };
   }>;
+  fetchSubmissionStatuses: (submissionIds: number[]) => Promise<
+    {
+      status: string;
+      submission_id: number;
+    }[]
+  >;
 }

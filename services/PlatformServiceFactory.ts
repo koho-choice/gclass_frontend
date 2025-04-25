@@ -2,7 +2,7 @@ import { Platform } from "../src/context/AuthContext";
 import { PlatformService } from "./common";
 import { ClassroomService } from "./ClassroomService";
 import { CanvasService } from "./CanvasService";
-
+import { ManualUploadService } from "./ManualUploadService";
 export class PlatformServiceFactory {
   private static instance: PlatformServiceFactory;
   private services: Map<Platform, PlatformService>;
@@ -11,6 +11,7 @@ export class PlatformServiceFactory {
     this.services = new Map([
       ["classroom", new ClassroomService()],
       ["canvas", new CanvasService()],
+      ["manual", new ManualUploadService()],
     ]);
   }
 

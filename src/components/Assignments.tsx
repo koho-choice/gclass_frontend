@@ -37,6 +37,7 @@ const Assignments = ({ courseId, onAssignmentSelect }) => {
           setLoading(false);
         })
         .catch((err) => {
+          console.error("Error fetching assignments:", err);
           setError(err.message);
           setLoading(false);
         });
@@ -113,11 +114,18 @@ const Assignments = ({ courseId, onAssignmentSelect }) => {
                   <div className="flex items-center space-x-6">
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
                       <Calendar className="h-4 w-4 text-gray-400" />
-                      <span>Due {formatDate(assignment.due_date)}</span>
+                      <span>
+                        {platform === "manual"
+                          ? "Manual upload"
+                          : `Due ${formatDate(assignment.due_date)}`}
+                      </span>
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
                       <Award className="h-4 w-4 text-gray-400" />
-                      <span>{assignment.max_points} points</span>
+                      <span>
+                        {assignment.max_points ? assignment.max_points : "0"}{" "}
+                        points
+                      </span>
                     </div>
                   </div>
                 </div>

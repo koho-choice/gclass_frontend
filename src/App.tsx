@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   BookOpen,
   CheckCircle,
@@ -23,7 +23,8 @@ import { useAuth } from "./context/AuthContext";
 import Courses from "./components/Courses";
 import Assignments from "./components/Assignments";
 import Submissions from "./components/Submissions";
-
+import ManualUpload from "./components/ManualUpload";
+import { host } from "./config";
 type RubricFeedback = {
   criterionId: string;
   points: number;
@@ -47,18 +48,41 @@ type Submission = {
 type GradingStatus = "pending" | "inProgress" | "completed";
 
 function App() {
-  const { isAuthenticated, setIsAuthenticated, user } = useAuth();
+  const { isAuthenticated, setIsAuthenticated, user, platform } = useAuth();
   // get the user name
   const userName = user?.name;
+  const email = user?.email;
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<
     string | null
   >(null);
   const [gradingStatus, setGradingStatus] = useState<GradingStatus>("pending");
 
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [isManualUploadVisible, setIsManualUploadVisible] =
+    useState<boolean>(false);
 
   const [rubricPreview, setRubricPreview] = useState<string | null>(null);
   const [showRubricPreview, setShowRubricPreview] = useState<boolean>(false);
+
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const [courseAdded, setCourseAdded] = useState<boolean>(false);
+  const [coursesRefreshTrigger, setCoursesRefreshTrigger] = useState<number>(0);
+
+  useEffect(() => {
+    // Reset state when platform changes
+    setSelectedCourseId(null);
+    setIsManualUploadVisible(false);
+  }, [platform]);
+
+  useEffect(() => {
+    if (courseAdded) {
+      console.log("Course added, refreshing courses...");
+      setCoursesRefreshTrigger((prev) => prev + 1); // Increment to trigger refresh
+      setCourseAdded(false); // Reset the state after refreshing
+      // Logic to refresh courses
+    }
+  }, [courseAdded]);
 
   const handleLogout = () => {
     setIsAuthenticated(false);
@@ -67,6 +91,16 @@ function App() {
     setSelectedAssignmentId(null);
     localStorage.removeItem("isAuthenticated");
     localStorage.removeItem("user");
+    setIsManualUploadVisible(false);
+  };
+
+  const handleCoursesLoaded = () => {
+    console.log("Courses component reported loaded after processing.");
+  };
+
+  const handleBackToCourses = () => {
+    setSelectedCourseId(null);
+    setSelectedAssignmentId(null);
   };
 
   return (
@@ -115,17 +149,29 @@ function App() {
         ) : (
           <>
             {!selectedCourseId ? (
-              <Courses
-                onCourseSelect={(courseId: string) =>
-                  setSelectedCourseId(courseId)
-                }
-              />
+              <>
+                <Courses
+                  refreshTrigger={coursesRefreshTrigger}
+                  isManualUploadVisible={isManualUploadVisible}
+                  onCourseSelect={(courseId: string) =>
+                    setSelectedCourseId(courseId)
+                  }
+                />
+                {platform === "manual" && !isManualUploadVisible && (
+                  <button
+                    className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                    onClick={() => setIsManualUploadVisible(true)}
+                  >
+                    Add Manual Class
+                  </button>
+                )}
+              </>
             ) : (
               <>
                 <div className="bg-white rounded-lg shadow p-6 mb-8">
                   <button
                     className="text-sm text-indigo-600 hover:text-indigo-800 mb-4"
-                    onClick={() => setSelectedCourseId(null)}
+                    onClick={handleBackToCourses}
                   >
                     &larr; Back to Courses!
                   </button>
@@ -157,6 +203,25 @@ function App() {
                     </button>
                   </div>
                 )}
+              </>
+            )}
+
+            {platform === "manual" && isManualUploadVisible && (
+              <>
+                <button
+                  className="text-sm text-indigo-600 hover:text-indigo-800 mb-4"
+                  onClick={() => setIsManualUploadVisible(false)}
+                >
+                  &larr; Back
+                </button>
+                <ManualUpload
+                  onCourseSelect={() => {}}
+                  onUploadComplete={() => {
+                    console.log("Upload complete, setting courseAdded to true");
+                    setIsManualUploadVisible(false);
+                    setCourseAdded(true); // Trigger course refresh
+                  }}
+                />
               </>
             )}
           </>

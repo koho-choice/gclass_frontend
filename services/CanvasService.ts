@@ -2,8 +2,10 @@ import { PlatformService } from "./common";
 import { host } from "../src/config";
 
 export class CanvasService implements PlatformService {
-  async getCourses() {
-    const response = await fetch(`${host}/canvas/courses`);
+  async getCourses(email?: string, page: number = 1, perPage: number = 10) {
+    const response = await fetch(
+      `${host}/canvas/courses?email=${email}&page=${page}&per_page=${perPage}`
+    );
     return response.json();
   }
 

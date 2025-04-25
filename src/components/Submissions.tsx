@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
   User,
@@ -24,6 +24,9 @@ import GooglePicker from "./GooglePicker";
 import { host } from "../config";
 import { PlatformServiceFactory } from "../../services/PlatformServiceFactory";
 import { Submission } from "../../services/common";
+import { ManualUploadService } from "../../services/ManualUploadService";
+import { CanvasService } from "../../services/CanvasService";
+import { ClassroomService } from "../../services/ClassroomService";
 
 interface SubmissionsProps {
   courseId: string;
@@ -38,7 +41,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
   setRubricPreview,
   setShowRubricPreview,
 }) => {
-  const { user, platform } = useAuth();
+  const { user } = useAuth();
   const [submissionsData, setSubmissionsData] = useState<{
     assignment_name: string;
     submissions: Submission[];
@@ -48,24 +51,6 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const [selectedSubmissions, setSelectedSubmissions] = useState<Set<string>>(
     new Set()
   );
-  const [gradingInProgress, setGradingInProgress] = useState(false);
-  const [gradingResults, setGradingResults] = useState<
-    Map<
-      string,
-      {
-        assignment_name: string;
-        assignment_id: string;
-        points_received: number;
-        rubric_breakdown: string;
-        graded_at: string;
-        student_name: string;
-        id: number;
-        points_possible: number;
-        explanation: string;
-        submission_id: string;
-      }
-    >
-  >(new Map());
   const [expandedSubmissions, setExpandedSubmissions] = useState<Set<string>>(
     new Set()
   );
@@ -78,7 +63,20 @@ const Submissions: React.FC<SubmissionsProps> = ({
   >(null);
   const [rubricText, setRubricText] = useState<string>("");
   const [rubricData, setRubricData] = useState<string | null>(null);
-  const [rubricGenerationStarted, setRubricGenerationStarted] = useState(false);
+  const { platform } = useAuth();
+  const [allSelected, setAllSelected] = useState(false);
+  const [rubricSource, setRubricSource] = useState<
+    "generated" | "uploaded" | null
+  >(null);
+  const [rubricLoading, setRubricLoading] = useState(false);
+  const [gradedSubmissions, setGradedSubmissions] = useState<Map<string, any>>(
+    new Map()
+  );
+  const [gradingProgress, setGradingProgress] = useState<number | null>(null);
+  const [totalSubmissionsToGrade, setTotalSubmissionsToGrade] =
+    useState<number>(0);
+  const [gradingInProgress, setGradingInProgress] = useState(false);
+  const [gradingStarted, setGradingStarted] = useState(false);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -117,15 +115,21 @@ const Submissions: React.FC<SubmissionsProps> = ({
   };
 
   const toggleSubmissionSelection = (submissionId: string) => {
+    // Update the selected submissions state
     setSelectedSubmissions((prev) => {
+      // Create a new Set from the previous state
       const newSet = new Set(prev);
+
+      // Check if the submissionId is already in the set
       if (newSet.has(submissionId)) {
+        // If it is, remove it (deselect)
         newSet.delete(submissionId);
-        console.log(`Submission ${submissionId} untoggled for grading`);
       } else {
+        // If it isn't, add it (select)
         newSet.add(submissionId);
-        console.log(`Submission ${submissionId} toggled for grading`);
       }
+
+      // Return the updated set
       return newSet;
     });
   };
@@ -143,9 +147,9 @@ const Submissions: React.FC<SubmissionsProps> = ({
   };
 
   const handleFileSelect = (fileId: string) => {
-    console.log("Selected rubric file ID:", fileId);
     setSelectedRubricFileId(fileId);
     setRubricData(fileId);
+    setRubricSource("uploaded");
   };
 
   const handleRubricTextChange = (
@@ -157,10 +161,9 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const generateRubricPreview = async () => {
     if (!rubricText) return;
 
-    setRubricGenerationStarted(true);
+    setRubricLoading(true);
 
     try {
-      // Fetch rubric preview
       const response = await fetch(`${host}/api/generate_rubric_preview`, {
         method: "POST",
         headers: {
@@ -174,230 +177,47 @@ const Submissions: React.FC<SubmissionsProps> = ({
         setRubricData(data.rubric);
         setRubricPreview(data.rubric);
         setShowRubricPreview(true);
+
+        setRubricSource("generated");
       } else {
         console.error("Failed to generate rubric preview");
       }
     } catch (error) {
       console.error("Error generating rubric preview:", error);
+    } finally {
+      setRubricLoading(false);
     }
-  };
-
-  const initiateGrading = async () => {
-    if (
-      selectedSubmissions.size === 0 ||
-      (!selectedRubricFileId && !rubricData)
-    )
-      return;
-
-    setGradingInProgress(true);
-    const submissionsToGrade = Array.from(selectedSubmissions);
-
-    try {
-      const service = PlatformServiceFactory.getInstance().getService(platform);
-      for (const submissionId of submissionsToGrade) {
-        const { task_id } = await service.gradeSubmission({
-          email: user?.email,
-          courseId,
-          assignmentId,
-          submissionIds: [submissionId],
-          rubric: rubricData,
-        });
-
-        setSubmissionsData((prev) => ({
-          ...prev,
-          submissions: prev.submissions.map((sub) =>
-            sub.submission_id === submissionId
-              ? { ...sub, task_id, grading_status: "in_progress" }
-              : sub
-          ),
-        }));
-
-        pollGradingStatus(submissionId, task_id);
-      }
-    } catch (error) {
-      console.error("Error initiating grading:", error);
-      setError("Failed to start grading process");
-    }
-  };
-
-  const pollGradingStatus = async (submissionId: string, taskId: string) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const service =
-          PlatformServiceFactory.getInstance().getService(platform);
-        const { status } = await service.getTaskStatus(taskId);
-
-        if (status.includes("completed")) {
-          clearInterval(pollInterval);
-
-          setSubmissionsData((prev) => {
-            const updatedData = {
-              ...prev,
-              submissions: prev.submissions.map((sub) =>
-                sub.submission_id === submissionId
-                  ? {
-                      ...sub,
-                      grading_status: "completed",
-                      submission_score: `${
-                        gradingResults.get(submissionId)?.points_received || 0
-                      }/${
-                        gradingResults.get(submissionId)?.points_possible || 0
-                      }`,
-                    }
-                  : sub
-              ),
-            };
-
-            const allCompleted = updatedData.submissions.every(
-              (sub) =>
-                !selectedSubmissions.has(sub.submission_id) ||
-                sub.grading_status === "completed"
-            );
-
-            if (allCompleted) {
-              setGradingInProgress(false);
-              setSelectedSubmissions(new Set());
-            }
-
-            return updatedData;
-          });
-
-          fetchGradingResults(submissionId);
-        } else if (status.includes("failed")) {
-          clearInterval(pollInterval);
-          console.error(`Grading failed for submission ${submissionId}`);
-          setError(`Grading failed for submission ${submissionId}`);
-          setGradingInProgress(false);
-        }
-      } catch (error) {
-        console.error("Error checking grading status:", error);
-        clearInterval(pollInterval);
-      }
-    }, 2000);
-  };
-
-  const fetchGradingResults = async (submissionId: string) => {
-    try {
-      const service = PlatformServiceFactory.getInstance().getService(platform);
-      const { latest_graded_submission } = await service.getGradedSubmission(
-        submissionId
-      );
-
-      setGradingResults((prev) =>
-        new Map(prev).set(submissionId, latest_graded_submission)
-      );
-
-      setSubmissionsData((prev) => ({
-        ...prev,
-        submissions: prev.submissions.map((sub) =>
-          sub.submission_id === submissionId
-            ? {
-                ...sub,
-                submission_score: `${
-                  latest_graded_submission.points_received || 0
-                }/${latest_graded_submission.points_possible || 0}`,
-              }
-            : sub
-        ),
-      }));
-    } catch (error) {
-      console.error("Error fetching grading results:", error);
-    }
-  };
-
-  const exportToExcel = () => {
-    const data = submissionsData.submissions.map((submission) => ({
-      Student: submission.student_name,
-      Score: submission.submission_score,
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Submissions");
-
-    XLSX.writeFile(workbook, "Submissions.xlsx");
-  };
-
-  const exportToCSV = () => {
-    const assignmentName = submissionsData.assignment_name;
-    const firstSubmissionId = submissionsData.submissions[0]?.submission_id;
-    const pointsPossible = firstSubmissionId
-      ? gradingResults.get(firstSubmissionId)?.points_possible || 0
-      : 0;
-
-    // Data for the first CSV: Student Name and Feedback
-    const feedbackData = submissionsData.submissions.map((submission) => {
-      const feedback =
-        gradingResults.get(submission.submission_id)?.explanation || "";
-      return {
-        Student: submission.student_name,
-        Feedback: feedback,
-      };
-    });
-
-    const feedbackWorksheet = XLSX.utils.json_to_sheet(feedbackData);
-    const feedbackCSVContent = XLSX.utils.sheet_to_csv(feedbackWorksheet);
-
-    // Create a blob and download the first CSV file
-    const feedbackBlob = new Blob([feedbackCSVContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const feedbackUrl = URL.createObjectURL(feedbackBlob);
-    const feedbackLink = document.createElement("a");
-    feedbackLink.href = feedbackUrl;
-    feedbackLink.setAttribute("download", "StudentFeedback.csv");
-    document.body.appendChild(feedbackLink);
-    feedbackLink.click();
-    document.body.removeChild(feedbackLink);
-
-    // Data for the second CSV: Other Information
-    const otherData = [
-      {
-        Student: "Points Possible",
-        ID: "",
-        "SIS User ID": "",
-        "SIS Login ID": "",
-        Section: "",
-        [assignmentName]: pointsPossible,
-      },
-      ...submissionsData.submissions.map((submission) => {
-        const pointsReceived =
-          gradingResults.get(submission.submission_id)?.points_received || 0;
-        return {
-          Student: submission.student_name,
-          ID: "",
-          "SIS User ID": "",
-          "SIS Login ID": "",
-          Section: "",
-          [assignmentName]: pointsReceived,
-        };
-      }),
-    ];
-
-    const otherWorksheet = XLSX.utils.json_to_sheet(otherData);
-    const otherCSVContent = XLSX.utils.sheet_to_csv(otherWorksheet);
-
-    // Create a blob and download the second CSV file
-    const otherBlob = new Blob([otherCSVContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const otherUrl = URL.createObjectURL(otherBlob);
-    const otherLink = document.createElement("a");
-    otherLink.href = otherUrl;
-    otherLink.setAttribute("download", "SubmissionsInfo.csv");
-    document.body.appendChild(otherLink);
-    otherLink.click();
-    document.body.removeChild(otherLink);
   };
 
   const handleSubmissionClick = (submissionId: string) => {
-    console.log("Submission clicked:", submissionId);
     setSelectedSubmissionId(submissionId);
     setShowPicker(true);
-    console.log("showPicker set to true");
+  };
+
+  const handleSubmissionLinkClick = async (
+    submissionId: string,
+    submissionLink: string
+  ) => {
+    if (platform === "manual") {
+      try {
+        const manualUploadService = new ManualUploadService();
+        const { submission_link } = await manualUploadService.getSubmissionLink(
+          submissionId
+        );
+        window.open(submission_link, "_blank", "noopener,noreferrer");
+      } catch (error) {
+        console.error("Error fetching manual submission link:", error);
+      }
+    } else {
+      window.open(submissionLink, "_blank", "noopener,noreferrer");
+    }
   };
 
   const renderRubricTable = (rubricDataStr: string) => {
+    if (rubricSource === "uploaded") {
+      return null;
+    }
+
     let rubricData;
     try {
       rubricData = JSON.parse(rubricDataStr);
@@ -437,6 +257,233 @@ const Submissions: React.FC<SubmissionsProps> = ({
     );
   };
 
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedSubmissions(new Set());
+    } else {
+      const allSubmissionIds = submissionsData.submissions.map(
+        (submission) => submission.submission_id
+      );
+      setSelectedSubmissions(new Set(allSubmissionIds));
+    }
+    setAllSelected(!allSelected);
+  };
+
+  const getService = () => {
+    switch (platform) {
+      case "manual":
+        return new ManualUploadService();
+      case "canvas":
+        return new CanvasService();
+      case "classroom":
+        return new ClassroomService();
+      default:
+        throw new Error("Unsupported platform");
+    }
+  };
+
+  const fetchGradedSubmissionWithPolling = async (submission_id: string) => {
+    const maxAttempts = 10; // Maximum number of attempts
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const service = getService();
+        const gradedSubmission = await service.getGradedSubmission(
+          submission_id
+        );
+        console.log(
+          `Fetched graded submission for ID ${submission_id}:`,
+          gradedSubmission
+        );
+
+        if (gradedSubmission && gradedSubmission.latest_graded_submission) {
+          setGradedSubmissions((prev) => {
+            const newMap = new Map(prev);
+            newMap.set(
+              String(submission_id),
+              gradedSubmission.latest_graded_submission
+            );
+            console.log(
+              "Updated gradedSubmissions state:",
+              Array.from(newMap.entries())
+            );
+            return newMap;
+          });
+
+          // Update the submissionsData state to trigger a re-render
+          setSubmissionsData((prevData) => {
+            const updatedSubmissions = prevData.submissions.map(
+              (submission) => {
+                if (submission.submission_id === submission_id) {
+                  return {
+                    ...submission,
+                    submission_score:
+                      gradedSubmission.latest_graded_submission.points_received,
+                  };
+                }
+                return submission;
+              }
+            );
+
+            return {
+              ...prevData,
+              submissions: updatedSubmissions,
+            };
+          });
+        } else {
+          console.warn(
+            `No graded submission data for ID ${submission_id} yet. Retrying...`
+          );
+          if (attempts < maxAttempts) {
+            attempts++;
+            setTimeout(poll, 1000); // Retry after 1 seconds
+          } else {
+            console.error(
+              `Max attempts reached for submission ID ${submission_id}.`
+            );
+          }
+        }
+      } catch (error) {
+        console.error(
+          `Error fetching graded submission for ID ${submission_id}:`,
+          error
+        );
+      }
+    };
+
+    poll();
+  };
+
+  const handleGradeSubmissions = async () => {
+    if (!rubricData) {
+      console.error("Error: No rubric provided.");
+      alert("Please provide a rubric before grading.");
+      return;
+    }
+
+    setGradingInProgress(true);
+    setGradingStarted(true);
+
+    try {
+      const submissionIds = Array.from(selectedSubmissions);
+      const service = getService();
+      const response = await service.gradeSubmission({
+        email: user?.email,
+        courseId,
+        assignmentId,
+        submissionIds,
+        rubric: rubricData,
+      });
+      console.log("Grading task started with task ID:", response.task_id);
+
+      const gradedList = new Set<number>();
+
+      // Function to check submission statuses
+      const checkStatuses = async () => {
+        const statuses = await service.fetchSubmissionStatuses(submissionIds);
+        let newGraded = false;
+
+        statuses.forEach(async ({ submission_id, status }) => {
+          if (!gradedList.has(submission_id)) {
+            if (status === "graded") {
+              console.log(`Submission ${submission_id} is graded.`);
+              fetchGradedSubmissionWithPolling(submission_id);
+              gradedList.add(submission_id);
+
+              newGraded = true;
+            }
+          }
+        });
+
+        if (gradedList.size < submissionIds.length) {
+          setTimeout(checkStatuses, 5000); // Retry after 5 seconds
+        } else {
+          setGradingProgress(null); // Reset the progress when done
+          setGradingInProgress(false);
+        }
+      };
+
+      // Start checking statuses
+      checkStatuses();
+    } catch (error) {
+      console.error("Error grading submissions:", error);
+      setGradingInProgress(false);
+    }
+  };
+
+  const exportAllGradedSubmissionsToCSV = () => {
+    // First CSV: Basic Graded Submissions
+    const basicCsvData = [
+      [
+        "Student",
+        "ID",
+        "SIS User ID",
+        "SIS Login ID",
+        "Section",
+        submissionsData.assignment_name,
+      ],
+      [
+        "Points Possible",
+        "",
+        "",
+        "",
+        "",
+        submissionsData.submissions[0]?.points_possible || "",
+      ],
+    ];
+
+    gradedSubmissions.forEach((submission) => {
+      basicCsvData.push([
+        submission.student_name,
+        "",
+        "",
+        "",
+        "",
+        submission.points_received,
+      ]);
+    });
+
+    const basicWorksheet = XLSX.utils.aoa_to_sheet(basicCsvData);
+    const basicWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      basicWorkbook,
+      basicWorksheet,
+      "Graded Submissions"
+    );
+    XLSX.writeFile(basicWorkbook, "graded_submissions.csv");
+
+    // Second CSV: Detailed Graded Submissions
+    const detailedCsvData = [
+      ["Student", "Points Received", "Rubric Breakdown", "Explanation"],
+    ];
+
+    gradedSubmissions.forEach((submission) => {
+      detailedCsvData.push([
+        submission.student_name,
+        submission.points_received,
+        submission.rubric_breakdown,
+        submission.explanation,
+      ]);
+    });
+
+    const detailedWorksheet = XLSX.utils.aoa_to_sheet(detailedCsvData);
+    const detailedWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      detailedWorkbook,
+      detailedWorksheet,
+      "Detailed Graded Submissions"
+    );
+    XLSX.writeFile(detailedWorkbook, "detailed_graded_submissions.csv");
+  };
+
+  const scrollToBottom = () => {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth",
+    });
+  };
+
   useEffect(() => {
     if (platform && user) {
       const service = PlatformServiceFactory.getInstance().getService(platform);
@@ -454,6 +501,18 @@ const Submissions: React.FC<SubmissionsProps> = ({
         });
     }
   }, [courseId, assignmentId, platform, user]);
+
+  useEffect(() => {
+    if (gradingStarted && !gradingInProgress) {
+      alert("All done!");
+      setGradingStarted(false);
+    }
+  }, [gradingInProgress, gradingStarted]);
+
+  console.log(
+    "Current gradedSubmissions state:",
+    Array.from(gradedSubmissions.entries())
+  );
 
   if (loading) {
     return (
@@ -492,61 +551,44 @@ const Submissions: React.FC<SubmissionsProps> = ({
           <h2 className="text-2xl font-bold text-gray-900 flex items-center">
             {submissionsData.assignment_name}
             <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
-              {submissionsData.submissions.length} submissions
+              {selectedSubmissions.size} / {submissionsData.submissions.length}{" "}
+              submissions selected
             </span>
+            {rubricData && (
+              <span
+                className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-green-100 text-green-800 cursor-pointer"
+                onClick={() => setRubricData(null)}
+              >
+                Rubric provided. Click to remove.
+              </span>
+            )}
           </h2>
         </div>
 
-        {selectedSubmissions.size > 0 && (
-          <button
-            onClick={initiateGrading}
-            disabled={
-              gradingInProgress || (!selectedRubricFileId && !rubricData)
-            }
-            className={`inline-flex items-center px-4 py-2 rounded-lg text-white font-medium text-sm transition-colors
-              ${
-                gradingInProgress || (!selectedRubricFileId && !rubricData)
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-indigo-600 hover:bg-indigo-700"
-              }`}
-            aria-label={
-              gradingInProgress
-                ? "Grading in progress"
-                : !selectedRubricFileId && !rubricData
-                ? "Select a rubric file or enter rubric text to enable grading"
-                : `Grade ${selectedSubmissions.size} selected submissions`
-            }
-          >
-            {gradingInProgress ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Grading in Progress...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Grade Selected ({selectedSubmissions.size})
-              </>
-            )}
-          </button>
-        )}
-
-        {!gradingInProgress &&
-          submissionsData.submissions.every(
-            (sub) => sub.grading_status === "completed"
-          ) && (
-            <div className="flex flex-col items-center">
-              <button
-                onClick={exportToCSV}
-                className="inline-flex items-center px-4 py-2 rounded-lg bg-green-600 text-white font-medium text-sm hover:bg-green-700 transition-colors"
-              >
-                Export to CSV
-              </button>
-              <p className="mt-2 text-sm text-gray-600">
-                Specially prepared file for your LMS (Schoology or Canvas).
-              </p>
-            </div>
+        <div className="flex items-center space-x-4">
+          {selectedSubmissions.size > 0 && (
+            <button
+              onClick={handleGradeSubmissions}
+              className="inline-flex items-center px-4 py-2 rounded-lg bg-green-600 text-white font-medium text-sm hover:bg-green-700 transition-colors"
+            >
+              Grade selected assignments
+            </button>
           )}
+
+          <button
+            onClick={handleSelectAll}
+            className="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition-colors"
+          >
+            {allSelected ? "Deselect All" : "Select All"}
+          </button>
+
+          <button
+            onClick={exportAllGradedSubmissionsToCSV}
+            className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 transition-colors"
+          >
+            Export to CSV
+          </button>
+        </div>
       </div>
 
       {submissionsData.submissions.length === 0 ? (
@@ -558,43 +600,46 @@ const Submissions: React.FC<SubmissionsProps> = ({
         </div>
       ) : (
         <div className="grid gap-4">
-          {submissionsData.submissions.map((submission, index) => (
-            <div
-              key={submission.submission_id || index}
-              className={`bg-white rounded-xl shadow-sm border-2 transition-all duration-200
-                ${
-                  selectedSubmissions.has(submission.submission_id)
-                    ? "border-indigo-500 ring-1 ring-indigo-500"
-                    : "border-gray-100 hover:border-indigo-100"
-                }`}
-              onClick={() => handleSubmissionClick(submission.submission_id)}
-            >
-              <div className="p-6">
-                <div className="space-y-4">
-                  {/* Header with student info and selection */}
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <User className="h-5 w-5 text-gray-400" />
-                        <h3 className="font-semibold text-gray-900">
-                          {submission.student_name || "Unknown Student"}
-                        </h3>
+          {submissionsData.submissions.map((submission, index) => {
+            const isGraded = gradedSubmissions.has(
+              String(submission.submission_id)
+            );
+            if (isGraded) {
+              console.log(
+                `Rendering graded results for submission ID: ${submission.submission_id}`
+              );
+            }
+            return (
+              <div
+                key={submission.submission_id || index}
+                className={`bg-white rounded-xl shadow-sm border-2 transition-all duration-200
+                  ${
+                    selectedSubmissions.has(submission.submission_id)
+                      ? "border-indigo-500 ring-1 ring-indigo-500"
+                      : "border-gray-100 hover:border-indigo-100"
+                  }`}
+                onClick={() => handleSubmissionClick(submission.submission_id)}
+              >
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {/* Header with student info and selection */}
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <User className="h-5 w-5 text-gray-400" />
+                          <h3 className="font-semibold text-gray-900">
+                            {submission.student_name || "Unknown Student"}
+                          </h3>
+                        </div>
+                        <div className="flex items-center space-x-2 text-sm text-gray-500">
+                          <Mail className="h-4 w-4 text-gray-400" />
+                          <span>
+                            {submission.student_email || "No email provided"}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2 text-sm text-gray-500">
-                        <Mail className="h-4 w-4 text-gray-400" />
-                        <span>
-                          {submission.student_email || "No email provided"}
-                        </span>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center space-x-3">
-                      {submission.grading_status === "in_progress" ? (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Grading...
-                        </span>
-                      ) : (
+                      <div className="flex items-center space-x-3">
                         <span
                           className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(
                             submission.submission_status
@@ -605,166 +650,162 @@ const Submissions: React.FC<SubmissionsProps> = ({
                             {submission.submission_status || "Unknown"}
                           </span>
                         </span>
-                      )}
 
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSubmissionSelection(submission.submission_id);
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSubmissionSelection(submission.submission_id);
 
-                          setShowPicker(true);
-                        }}
-                        disabled={submission.grading_status === "in_progress"}
-                        className={`p-2 rounded-md transition-colors
-                          ${
+                            setShowPicker(true);
+                          }}
+                          className={`p-2 rounded-md transition-colors
+                            ${
+                              selectedSubmissions.has(submission.submission_id)
+                                ? "bg-indigo-100 text-indigo-600"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }`}
+                          aria-label={
                             selectedSubmissions.has(submission.submission_id)
-                              ? "bg-indigo-100 text-indigo-600"
-                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                          }`}
-                        aria-label={
-                          selectedSubmissions.has(submission.submission_id)
-                            ? "Deselect submission"
-                            : "Select submission for grading"
-                        }
-                      >
-                        {selectedSubmissions.has(submission.submission_id) ? (
-                          <CheckCircle className="h-5 w-5" />
-                        ) : (
-                          <Play className="h-5 w-5" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Submission details */}
-                  <div className="grid md:grid-cols-2 gap-4 py-4 border-y border-gray-100">
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2 text-sm text-gray-600">
-                        <FileText className="h-4 w-4 text-gray-400" />
-                        <span>{submission.submission_title || "No title"}</span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-sm text-gray-600">
-                        <Calendar className="h-4 w-4 text-gray-400" />
-                        <span>
-                          {submission.submission_date
-                            ? formatDate(submission.submission_date)
-                            : "No date"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2 text-sm">
-                        <Award className="h-4 w-4 text-gray-400" />
-                        <span className="font-medium">
-                          Score:
-                          {submission.grading_status === "in_progress" ? (
-                            <span className="text-gray-500">
-                              Grading in progress...
-                            </span>
-                          ) : (
-                            submission.submission_score || "Not graded.."
-                          )}
-                        </span>
-                      </div>
-                      {submission.submission_link && (
-                        <a
-                          href={submission.submission_link}
-                          className="inline-flex items-center space-x-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
-                          target="_blank"
-                          rel="noopener noreferrer"
+                              ? "Deselect submission"
+                              : "Select submission"
+                          }
                         >
-                          <ExternalLink className="h-4 w-4" />
-                          <span>View Submission</span>
-                        </a>
-                      )}
+                          {selectedSubmissions.has(submission.submission_id) ? (
+                            <CheckCircle className="h-5 w-5" />
+                          ) : (
+                            <Play className="h-5 w-5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Grading Results */}
-                  {gradingResults.has(submission.submission_id) && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleExpandedSubmission(submission.submission_id);
-                        }}
-                        className="w-full flex items-center justify-between text-left"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <Info className="h-5 w-5 text-indigo-500" />
-                          <span className="font-medium text-gray-900">
-                            Grading Results
+                    {/* Submission details */}
+                    <div className="grid md:grid-cols-2 gap-4 py-4 border-y border-gray-100">
+                      <div className="space-y-3">
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <FileText className="h-4 w-4 text-gray-400" />
+                          <span>
+                            {submission.submission_title || "No title"}
                           </span>
                         </div>
-                        {expandedSubmissions.has(submission.submission_id) ? (
-                          <ChevronUp className="h-5 w-5 text-gray-400" />
-                        ) : (
-                          <ChevronDown className="h-5 w-5 text-gray-400" />
-                        )}
-                      </button>
-
-                      {expandedSubmissions.has(submission.submission_id) && (
-                        <div className="mt-4 space-y-3 text-sm">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="font-medium text-gray-700">
-                                Points
-                              </p>
-                              <p className="text-gray-600">
-                                {
-                                  gradingResults.get(submission.submission_id)
-                                    ?.points_received
-                                }{" "}
-                                /{" "}
-                                {
-                                  gradingResults.get(submission.submission_id)
-                                    ?.points_possible
-                                }
-                              </p>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-700">
-                                Graded At
-                              </p>
-                              <p className="text-gray-600">
-                                {new Date(
-                                  gradingResults.get(
-                                    submission.submission_id
-                                  )?.graded_at
-                                ).toLocaleString()}
-                              </p>
-                            </div>
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-700">
-                              Rubric Breakdown
-                            </p>
-                            <p className="text-gray-600 whitespace-pre-line">
-                              {
-                                gradingResults.get(submission.submission_id)
-                                  ?.rubric_breakdown
-                              }
-                            </p>
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-700">
-                              Explanation
-                            </p>
-                            <p className="text-gray-600">
-                              {
-                                gradingResults.get(submission.submission_id)
-                                  ?.explanation
-                              }
-                            </p>
-                          </div>
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span>
+                            {platform === "manual"
+                              ? "Manual upload"
+                              : submission.submission_date
+                              ? formatDate(submission.submission_date)
+                              : "No date"}
+                          </span>
                         </div>
-                      )}
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <Award className="h-4 w-4 text-gray-400" />
+                          <span>
+                            Score:{" "}
+                            {submission.points_possible
+                              ? gradedSubmissions.has(
+                                  String(submission.submission_id)
+                                )
+                                ? `${
+                                    gradedSubmissions.get(
+                                      String(submission.submission_id)
+                                    ).points_received
+                                  }/${
+                                    gradedSubmissions.get(
+                                      String(submission.submission_id)
+                                    ).points_possible
+                                  }`
+                                : submission.submission_score !== "No score"
+                                ? `${submission.submission_score}/${submission.points_possible}`
+                                : "Not graded"
+                              : "Not graded"}
+                          </span>
+                        </div>
+                        {submission.submission_link && (
+                          <a
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleSubmissionLinkClick(
+                                submission.submission_id,
+                                submission.submission_link
+                              );
+                            }}
+                            className="inline-flex items-center space-x-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            <span>View Submission</span>
+                          </a>
+                        )}
+                      </div>
                     </div>
-                  )}
+                    {isGraded && (
+                      <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                        <h4 className="font-semibold text-gray-800">
+                          Grading Results for{" "}
+                          {
+                            gradedSubmissions.get(
+                              String(submission.submission_id)
+                            ).student_name
+                          }
+                        </h4>
+                        <p>
+                          <strong>Assignment Name:</strong>{" "}
+                          {
+                            gradedSubmissions.get(
+                              String(submission.submission_id)
+                            ).assignment_name
+                          }
+                        </p>
+                        <p>
+                          <strong>Points Received:</strong>{" "}
+                          {
+                            gradedSubmissions.get(
+                              String(submission.submission_id)
+                            ).points_received
+                          }
+                        </p>
+                        <p>
+                          <strong>Points Possible:</strong>{" "}
+                          {
+                            gradedSubmissions.get(
+                              String(submission.submission_id)
+                            ).points_possible
+                          }
+                        </p>
+                        <p>
+                          <strong>Rubric Breakdown:</strong>{" "}
+                          {
+                            gradedSubmissions.get(
+                              String(submission.submission_id)
+                            ).rubric_breakdown
+                          }
+                        </p>
+                        <p>
+                          <strong>Explanation:</strong>{" "}
+                          {
+                            gradedSubmissions.get(
+                              String(submission.submission_id)
+                            ).explanation
+                          }
+                        </p>
+                        <p>
+                          <strong>Graded At:</strong>{" "}
+                          {new Date(
+                            gradedSubmissions.get(
+                              String(submission.submission_id)
+                            ).graded_at
+                          ).toLocaleString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {showPicker && (
@@ -775,22 +816,23 @@ const Submissions: React.FC<SubmissionsProps> = ({
       <textarea
         value={rubricText}
         onChange={handleRubricTextChange}
-        placeholder="Enter your assignment prompt if you'd like to generate a rubric"
+        placeholder="Enter your assignment prompt if you'd like to generate a rubric. You can say things like 'give me a 10 point rubric on the prompt: what is the meaning of life, don't penalize for grammar'"
         className="w-full p-2 border rounded"
       />
       <button
         onClick={generateRubricPreview}
         className="mt-2 px-4 py-2 bg-blue-600 text-white rounded"
+        disabled={rubricLoading}
       >
-        Generate Rubric Preview
+        {rubricLoading ? "Generating..." : "Generate Rubric Preview"}
       </button>
-      <div className="mt-6">
-        {rubricGenerationStarted && !rubricData ? (
-          <p>Loading rubric...</p>
-        ) : (
-          rubricData && renderRubricTable(rubricData)
-        )}
-      </div>
+      <div className="mt-6">{rubricData && renderRubricTable(rubricData)}</div>
+      <button
+        onClick={scrollToBottom}
+        className="fixed bottom-4 right-4 px-4 py-2 bg-blue-600 text-white rounded"
+      >
+        Click to add rubric
+      </button>
     </div>
   );
 };
