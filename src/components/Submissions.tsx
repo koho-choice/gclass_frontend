@@ -72,11 +72,10 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const [gradedSubmissions, setGradedSubmissions] = useState<Map<string, any>>(
     new Map()
   );
-  const [gradingProgress, setGradingProgress] = useState<number | null>(null);
-  const [totalSubmissionsToGrade, setTotalSubmissionsToGrade] =
-    useState<number>(0);
   const [gradingInProgress, setGradingInProgress] = useState(false);
   const [gradingStarted, setGradingStarted] = useState(false);
+  const [gradedCount, setGradedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -367,6 +366,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
 
     try {
       const submissionIds = Array.from(selectedSubmissions);
+      setTotalCount(submissionIds.length); // Set total count
       const service = getService();
       const response = await service.gradeSubmission({
         email: user?.email,
@@ -396,10 +396,14 @@ const Submissions: React.FC<SubmissionsProps> = ({
           }
         });
 
-        if (gradedList.size < submissionIds.length) {
+        // Track progress
+        const gradedCount = gradedList.size;
+        setGradedCount(gradedCount); // Update graded count
+        console.log(`Graded ${gradedCount} out of ${totalCount} submissions.`);
+
+        if (gradedCount < totalCount) {
           setTimeout(checkStatuses, 5000); // Retry after 5 seconds
         } else {
-          setGradingProgress(null); // Reset the progress when done
           setGradingInProgress(false);
         }
       };
@@ -551,8 +555,9 @@ const Submissions: React.FC<SubmissionsProps> = ({
           <h2 className="text-2xl font-bold text-gray-900 flex items-center">
             {submissionsData.assignment_name}
             <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
-              {selectedSubmissions.size} / {submissionsData.submissions.length}{" "}
-              submissions selected
+              {gradingInProgress
+                ? `${gradedCount} / ${totalCount} graded`
+                : `${selectedSubmissions.size} / ${submissionsData.submissions.length} submissions selected`}
             </span>
             {rubricData && (
               <span
@@ -571,7 +576,9 @@ const Submissions: React.FC<SubmissionsProps> = ({
               onClick={handleGradeSubmissions}
               className="inline-flex items-center px-4 py-2 rounded-lg bg-green-600 text-white font-medium text-sm hover:bg-green-700 transition-colors"
             >
-              Grade selected assignments
+              {gradingInProgress
+                ? `Now grading ${selectedSubmissions.size} assignments`
+                : "Grade selected assignments"}
             </button>
           )}
 

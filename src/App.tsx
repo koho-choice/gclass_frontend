@@ -25,6 +25,8 @@ import Assignments from "./components/Assignments";
 import Submissions from "./components/Submissions";
 import ManualUpload from "./components/ManualUpload";
 import { host } from "./config";
+import ScrollToTopButton from "./components/ScrollToTopButton";
+
 type RubricFeedback = {
   criterionId: string;
   points: number;
@@ -142,9 +144,7 @@ function App() {
             <h2 className="mt-2 text-lg font-medium text-gray-900">
               Welcome to Crex Classroom Assistant
             </h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Connect with Google Classroom to get started
-            </p>
+            <p className="mt-1 text-sm text-gray-500">Sign in to get started</p>
           </div>
         ) : (
           <>
@@ -227,6 +227,7 @@ function App() {
           </>
         )}
       </main>
+      <ScrollToTopButton />
     </div>
   );
 }
