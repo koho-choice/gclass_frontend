@@ -128,6 +128,8 @@ const Submissions: React.FC<SubmissionsProps> = ({
         newSet.add(submissionId);
       }
 
+      // Log the count of selected submissions
+
       // Return the updated set
       return newSet;
     });
@@ -360,12 +362,18 @@ const Submissions: React.FC<SubmissionsProps> = ({
       alert("Please provide a rubric before grading.");
       return;
     }
-    setGradingStarted(true);
     setGradingInProgress(true);
+    setGradingStarted(true);
 
     try {
+      console.log("Selected submissions:", selectedSubmissions);
       const submissionIds = Array.from(selectedSubmissions);
-      setTotalCount(submissionIds.length); // Set total count
+      console.log("Submission IDs:", submissionIds);
+
+      // Use submissionIds.length directly
+      const totalSubmissions = submissionIds.length;
+      console.log("Total submissions:", totalSubmissions);
+
       const service = getService();
       const response = await service.gradeSubmission({
         email: user?.email,
@@ -398,12 +406,15 @@ const Submissions: React.FC<SubmissionsProps> = ({
         // Track progress
         const gradedCount = gradedList.size;
         setGradedCount(gradedCount); // Update graded count
-        console.log(`Graded ${gradedCount} out of ${totalCount} submissions.`);
+        console.log(
+          `Graded ${gradedCount} out of ${totalSubmissions} submissions.`
+        );
 
-        if (gradedCount < totalCount) {
+        if (gradedCount < totalSubmissions) {
           setTimeout(checkStatuses, 5000); // Retry after 5 seconds
         } else {
           setGradingInProgress(false);
+          setTotalCount(totalSubmissions); // Set totalCount once grading is done
         }
       };
 
@@ -511,11 +522,6 @@ const Submissions: React.FC<SubmissionsProps> = ({
       setGradingStarted(false);
     }
   }, [gradingInProgress, gradingStarted]);
-
-  console.log(
-    "Current gradedSubmissions state:",
-    Array.from(gradedSubmissions.entries())
-  );
 
   if (loading) {
     return (
