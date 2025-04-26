@@ -54,7 +54,6 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const [expandedSubmissions, setExpandedSubmissions] = useState<Set<string>>(
     new Set()
   );
-  const [showPicker, setShowPicker] = useState(false);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<
     string | null
   >(null);
@@ -192,7 +191,6 @@ const Submissions: React.FC<SubmissionsProps> = ({
 
   const handleSubmissionClick = (submissionId: string) => {
     setSelectedSubmissionId(submissionId);
-    setShowPicker(true);
   };
 
   const handleSubmissionLinkClick = async (
@@ -668,8 +666,6 @@ const Submissions: React.FC<SubmissionsProps> = ({
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleSubmissionSelection(submission.submission_id);
-
-                            setShowPicker(true);
                           }}
                           className={`p-2 rounded-md transition-colors
                             ${
@@ -821,11 +817,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
           })}
         </div>
       )}
-      {showPicker && (
-        <div className="mt-4">
-          <GooglePicker onFileSelect={handleFileSelect} />
-        </div>
-      )}
+      <GooglePicker onFileSelect={handleFileSelect} />
       <textarea
         value={rubricText}
         onChange={handleRubricTextChange}
