@@ -370,8 +370,9 @@ const Submissions: React.FC<SubmissionsProps> = ({
       const submissionIds = Array.from(selectedSubmissions);
       console.log("Submission IDs:", submissionIds);
 
-      // Use submissionIds.length directly
+      // Set totalCount immediately after determining the number of submissions
       const totalSubmissions = submissionIds.length;
+      setTotalCount(totalSubmissions);
       console.log("Total submissions:", totalSubmissions);
 
       const service = getService();
@@ -414,7 +415,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
           setTimeout(checkStatuses, 5000); // Retry after 5 seconds
         } else {
           setGradingInProgress(false);
-          setTotalCount(totalSubmissions); // Set totalCount once grading is done
+          // No need to set totalCount here again since it's already set
         }
       };
 
