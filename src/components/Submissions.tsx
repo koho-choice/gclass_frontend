@@ -360,9 +360,8 @@ const Submissions: React.FC<SubmissionsProps> = ({
       alert("Please provide a rubric before grading.");
       return;
     }
-
-    setGradingInProgress(true);
     setGradingStarted(true);
+    setGradingInProgress(true);
 
     try {
       const submissionIds = Array.from(selectedSubmissions);
