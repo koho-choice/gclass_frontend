@@ -63,13 +63,12 @@ const Login = () => {
 
   const login = useGoogleLogin({
     flow: "auth-code",
-    scope:
-      "openid profile email " +
-      // "https://www.googleapis.com/auth/classroom.courses " +
-      // "https://www.googleapis.com/auth/classroom.rosters " +
-      // "https://www.googleapis.com/auth/classroom.coursework.students " +
-      // "https://www.googleapis.com/auth/classroom.coursework.me " +
-      "https://www.googleapis.com/auth/drive.readonly ",
+    scope: "openid profile email ",
+    // "https://www.googleapis.com/auth/classroom.courses " +
+    // "https://www.googleapis.com/auth/classroom.rosters " +
+    // "https://www.googleapis.com/auth/classroom.coursework.students " +
+    // "https://www.googleapis.com/auth/classroom.coursework.me " +
+    //"https://www.googleapis.com/auth/drive.readonly ",
     // "https://www.googleapis.com/auth/classroom.profile.emails ",
     onSuccess: handleLoginSuccess,
     onError: (error) => {

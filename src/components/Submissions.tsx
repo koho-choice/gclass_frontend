@@ -20,13 +20,13 @@ import {
   Info,
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import GooglePicker from "./GooglePicker";
 import { host } from "../config";
 import { PlatformServiceFactory } from "../../services/PlatformServiceFactory";
 import { Submission } from "../../services/common";
 import { ManualUploadService } from "../../services/ManualUploadService";
 import { CanvasService } from "../../services/CanvasService";
 import { ClassroomService } from "../../services/ClassroomService";
+import mammoth from "mammoth";
 
 interface SubmissionsProps {
   courseId: string;
@@ -144,12 +144,6 @@ const Submissions: React.FC<SubmissionsProps> = ({
       }
       return newSet;
     });
-  };
-
-  const handleFileSelect = (fileId: string) => {
-    setSelectedRubricFileId(fileId);
-    setRubricData(fileId);
-    setRubricSource("uploaded");
   };
 
   const handleRubricTextChange = (
@@ -497,6 +491,39 @@ const Submissions: React.FC<SubmissionsProps> = ({
     });
   };
 
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (
+        file.type ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          setRubricData(result.value);
+          console.log("Rubric Data from .docx:", result.value);
+          setRubricSource("uploaded");
+        } catch (error) {
+          console.error("Error reading .docx file:", error);
+        }
+      } else {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target?.result;
+          if (typeof content === "string") {
+            setRubricData(content);
+            console.log("Rubric Data from file:", content);
+            setRubricSource("uploaded");
+          }
+        };
+        reader.readAsText(file);
+      }
+    }
+  };
+
   useEffect(() => {
     if (platform && user) {
       const service = PlatformServiceFactory.getInstance().getService(platform);
@@ -817,7 +844,21 @@ const Submissions: React.FC<SubmissionsProps> = ({
           })}
         </div>
       )}
-      <GooglePicker onFileSelect={handleFileSelect} />
+      <div className="flex items-center space-x-4">
+        <label
+          htmlFor="file-upload"
+          className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 transition-colors cursor-pointer"
+        >
+          Upload Rubric
+        </label>
+        <input
+          id="file-upload"
+          type="file"
+          accept=".txt,.json,.docx" // Adjust the accepted file types as needed
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+      </div>
       <textarea
         value={rubricText}
         onChange={handleRubricTextChange}
@@ -829,7 +870,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
         className="mt-2 px-4 py-2 bg-blue-600 text-white rounded"
         disabled={rubricLoading}
       >
-        {rubricLoading ? "Generating..." : "Generate Rubric Preview"}
+        {rubricLoading ? "Generating..." : "Generate a rubric"}
       </button>
       <div className="mt-6">{rubricData && renderRubricTable(rubricData)}</div>
       <button
