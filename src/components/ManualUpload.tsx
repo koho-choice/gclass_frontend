@@ -49,7 +49,7 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
         fileType === "application/zip"
           ? file.name.includes("submissions")
           : true;
-
+      console.log("file.type", file.type, "file.name", file.name);
       if (!isValidType || !isValidName) {
         setError(
           `Please upload a valid ${fileType} file${

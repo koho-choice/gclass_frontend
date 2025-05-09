@@ -111,7 +111,7 @@ function App() {
     <Router>
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <header className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+          <div className="w-full mx-auto px-4 py-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between">
               <Link to="/" className="flex items-center">
                 <BookOpen className="h-8 w-8 text-indigo-600" />
@@ -140,7 +140,7 @@ function App() {
           </div>
         </header>
 
-        <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-grow w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Routes>
             <Route
               path="/"
@@ -245,7 +245,7 @@ function App() {
         </main>
 
         <footer className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+          <div className="w-full mx-auto px-4 py-4 sm:px-6 lg:px-8">
             <div className="flex justify-center">
               <Link
                 to="/privacy-policy"
