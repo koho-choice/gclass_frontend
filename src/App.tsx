@@ -29,6 +29,11 @@ import { host } from "./config";
 import ScrollToTopButton from "./components/ScrollToTopButton";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import TermsOfService from "./components/TermsofService";
+import Success from "./payments/Success";
+import Cancel from "./payments/Cancel";
+import PortalButton from "./components/PortalButton";
+import Modal from "react-modal";
+
 type RubricFeedback = {
   criterionId: string;
   points: number;
@@ -73,6 +78,9 @@ function App() {
   const [courseAdded, setCourseAdded] = useState<boolean>(false);
   const [coursesRefreshTrigger, setCoursesRefreshTrigger] = useState<number>(0);
 
+  const [upgradeModalIsOpen, setUpgradeModalIsOpen] = useState(false);
+  const { subMessage, fetchSubscriptionStatus } = useAuth();
+
   useEffect(() => {
     // Reset state when platform changes
     setSelectedCourseId(null);
@@ -88,14 +96,37 @@ function App() {
     }
   }, [courseAdded]);
 
+  useEffect(() => {
+    const checkSubscription = async () => {
+      fetchSubscriptionStatus();
+    };
+    checkSubscription();
+  }, []); // Empty dependency array ensures this runs once on mount
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const checkSubscription = async () => {
+        if (subMessage !== "paid") {
+          setUpgradeModalIsOpen(true);
+        } else {
+          setUpgradeModalIsOpen(false);
+        }
+      };
+      checkSubscription();
+    }
+  }, [isAuthenticated, subMessage]);
+
   const handleLogout = () => {
     setIsAuthenticated(false);
     setGradingStatus("pending");
     setSelectedCourseId(null);
     setSelectedAssignmentId(null);
-    localStorage.removeItem("isAuthenticated");
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("isAuthenticated");
+    sessionStorage.removeItem("user");
     setIsManualUploadVisible(false);
+    sessionStorage.removeItem("jwtToken");
+    sessionStorage.removeItem("platform");
+    sessionStorage.removeItem("subMessage");
   };
 
   const handleCoursesLoaded = () => {
@@ -126,6 +157,7 @@ function App() {
                   <div className="flex items-center text-sm">
                     <User className="h-5 w-5 text-gray-500 mr-2" />
                     <span className="text-gray-700">{userName}</span>
+                    <PortalButton />
                   </div>
                   <button
                     className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
@@ -241,6 +273,8 @@ function App() {
             />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
+            <Route path="/success" element={<Success />} />
+            <Route path="/cancel" element={<Cancel />} />
           </Routes>
         </main>
 
@@ -264,6 +298,36 @@ function App() {
         </footer>
 
         <ScrollToTopButton />
+
+        <Modal
+          isOpen={upgradeModalIsOpen}
+          contentLabel="Upgrade Modal"
+          style={{
+            content: {
+              top: "50%",
+              left: "50%",
+              right: "auto",
+              bottom: "auto",
+              marginRight: "-50%",
+              transform: "translate(-50%, -50%)",
+              padding: "20px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
+              width: "80%",
+              maxWidth: "400px",
+            },
+            overlay: {
+              backgroundColor: "rgba(0, 0, 0, 0.75)",
+            },
+          }}
+        >
+          <h2 className="text-lg font-semibold mb-2">Upgrade Required</h2>
+          <p className="mb-4">
+            Your current subscription does not allow access. Please upgrade to
+            continue.
+          </p>
+          <PortalButton />
+        </Modal>
       </div>
     </Router>
   );

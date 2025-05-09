@@ -3,6 +3,7 @@ import { host } from "../src/config";
 
 export class ManualUploadService implements PlatformService {
   async getCourses(
+    token: string,
     email?: string,
     page: number = 1,
     perPage: number = 10
@@ -13,39 +14,63 @@ export class ManualUploadService implements PlatformService {
     total_courses: number;
   }> {
     const response = await fetch(
-      `${host}/manual/courses?teacher_email=${email}&page=${page}&per_page=${perPage}`
+      `${host}/manual/courses?teacher_email=${email}&page=${page}&per_page=${perPage}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
+
+    if (!response.ok) {
+      throw new Error(`Error fetching courses: ${response.statusText}`);
+    }
+
     return response.json();
   }
 
   async getAssignments(
+    token: string,
     courseId: string,
     email?: string
   ): Promise<{ assignments: Assignment[] }> {
     const response = await fetch(
-      `${host}/manual/assignments/${courseId}?teacher_email=${email}`
+      `${host}/manual/assignments/${courseId}?teacher_email=${email}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
     return response.json();
   }
 
   async getSubmissions(
+    token: string,
     courseId: string,
     assignmentId: string,
     email?: string
   ): Promise<{ assignment_name: string; submissions: Submission[] }> {
     const response = await fetch(
-      `${host}/manual/submissions/${courseId}/${assignmentId}?teacher_email=${email}`
+      `${host}/manual/submissions/${courseId}/${assignmentId}?teacher_email=${email}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
     return response.json();
   }
 
   async gradeSubmission({
+    token,
     email,
     courseId,
     assignmentId,
     submissionIds,
     rubric,
   }: {
+    token: string;
     email?: string;
     courseId: string;
     assignmentId: string;
@@ -56,25 +81,36 @@ export class ManualUploadService implements PlatformService {
       `${host}/manual/grade_submission?email=${email}&assignment_id=${assignmentId}&course_id=${courseId}`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ submission_ids: submissionIds, rubric }),
       }
     );
     return response.json();
   }
 
-  async getTaskStatus(taskId: string): Promise<{ status: string }> {
-    const response = await fetch(`${host}/classroom/task_status/${taskId}`);
+  async getTaskStatus(
+    token: string,
+    taskId: string
+  ): Promise<{ status: string }> {
+    const response = await fetch(`${host}/classroom/task_status/${taskId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     return response.json();
   }
 
   // Function to fetch submission statuses
-  async fetchSubmissionStatuses(submissionIds: number[]) {
+  async fetchSubmissionStatuses(token: string, submissionIds: number[]) {
     try {
       const response = await fetch(`${host}/submissions/status`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ submission_ids: submissionIds }),
       });
@@ -91,7 +127,10 @@ export class ManualUploadService implements PlatformService {
     }
   }
 
-  async getGradedSubmission(submissionId: string): Promise<{
+  async getGradedSubmission(
+    token: string,
+    submissionId: string
+  ): Promise<{
     latest_graded_submission: {
       points_received: number;
       points_possible: number;
@@ -101,16 +140,27 @@ export class ManualUploadService implements PlatformService {
     };
   }> {
     const response = await fetch(
-      `${host}/classroom/graded_submissions?submission_id=${submissionId}`
+      `${host}/classroom/graded_submissions?submission_id=${submissionId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
     return response.json();
   }
 
   async getSubmissionLink(
+    token: string,
     submissionId: string
   ): Promise<{ submission_link: string }> {
     const response = await fetch(
-      `${host}/manual/submission_link/${submissionId}`
+      `${host}/manual/submission_link/${submissionId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
     if (!response.ok) {
       throw new Error(

@@ -10,7 +10,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { Course } from "../../services/common";
 import { PlatformServiceFactory } from "../../services/PlatformServiceFactory";
-import { host } from "../config";
+import { host, getJwtToken } from "../config";
 import { ManualUploadService } from "../../services/ManualUploadService";
 
 // Define props type
@@ -36,6 +36,7 @@ const Courses: React.FC<CoursesProps> = ({
   const perPage = 10; // Adjust perPage as needed
   const teacherEmail = user.email;
   const manualUploadService = new ManualUploadService();
+  const token = getJwtToken();
 
   const fetchCoursesData = async () => {
     if (!isAuthenticated || !user || !platform) {
@@ -49,10 +50,12 @@ const Courses: React.FC<CoursesProps> = ({
     try {
       const service = PlatformServiceFactory.getInstance().getService(platform);
 
-      const data = await service.getCourses(teacherEmail, page, perPage);
+      // Include the JWT token in the headers
+      const data = await service.getCourses(token, teacherEmail, page, perPage);
 
       // Process successful fetch
       setCourses(data.courses || []);
+
       setError(""); // Clear error on successful fetch
     } catch (err: any) {
       setError(err.message || "Failed to fetch courses");
@@ -65,7 +68,12 @@ const Courses: React.FC<CoursesProps> = ({
   const fetchTotalCoursesCount = async () => {
     try {
       const response = await fetch(
-        `${host}/courses/count?teacher_email=${teacherEmail}`
+        `${host}/courses/count?teacher_email=${teacherEmail}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       const data = await response.json();
       setTotalCourses(data.total_courses);

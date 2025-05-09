@@ -7,7 +7,7 @@ import React, {
   useEffect,
 } from "react";
 import { jwtDecode } from "jwt-decode";
-import { host } from "../config";
+import { host, getJwtToken } from "../config";
 // Define platform type
 export type Platform = "classroom" | "canvas" | undefined;
 
@@ -26,6 +26,8 @@ interface AuthContextType {
   platform?: Platform;
   setPlatform: (platform: Platform) => void;
   getAccessToken: () => Promise<string | null>;
+  subMessage: string | null;
+  fetchSubscriptionStatus: () => Promise<void>;
 }
 
 // Create the authentication context with an undefined default value
@@ -33,66 +35,67 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // AuthProvider component to wrap around parts of the app that need access to authentication state
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // Initialize state from localStorage
+  // Initialize state from sessionStorage
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem("isAuthenticated") === "true";
+    return sessionStorage.getItem("isAuthenticated") === "true";
   });
 
   const [user, setUser] = useState<User | undefined>(() => {
-    const savedUser = localStorage.getItem("user");
+    const savedUser = sessionStorage.getItem("user");
     return savedUser ? JSON.parse(savedUser) : undefined;
   });
 
   const [accessToken, setAccessToken] = useState(() => {
-    return localStorage.getItem("accessToken");
+    return sessionStorage.getItem("accessToken");
   });
 
   const [refreshToken, setRefreshToken] = useState(() => {
-    return localStorage.getItem("refreshToken");
+    return sessionStorage.getItem("refreshToken");
   });
 
   // Add platform state
   const [platform, setPlatform] = useState<Platform>(() => {
-    return (localStorage.getItem("platform") as Platform) || undefined;
+    return (sessionStorage.getItem("platform") as Platform) || undefined;
   });
+  const [subMessage, setSubMessage] = useState<string | null>(null);
 
-  // Update localStorage when auth state changes
+  // Update sessionStorage when auth state changes
   useEffect(() => {
-    localStorage.setItem("isAuthenticated", isAuthenticated.toString());
+    sessionStorage.setItem("isAuthenticated", isAuthenticated.toString());
   }, [isAuthenticated]);
 
-  // Update localStorage when user data changes
+  // Update sessionStorage when user data changes
   useEffect(() => {
     if (user) {
-      localStorage.setItem("user", JSON.stringify(user));
+      sessionStorage.setItem("user", JSON.stringify(user));
     } else {
-      localStorage.removeItem("user");
+      sessionStorage.removeItem("user");
     }
   }, [user]);
 
-  // Update localStorage when platform changes
+  // Update sessionStorage when platform changes
   useEffect(() => {
     if (platform) {
-      localStorage.setItem("platform", platform);
+      sessionStorage.setItem("platform", platform);
     } else {
-      localStorage.removeItem("platform");
+      sessionStorage.removeItem("platform");
     }
   }, [platform]);
 
-  // Update localStorage when tokens change
+  // Update sessionStorage when tokens change
   useEffect(() => {
     if (accessToken) {
-      localStorage.setItem("accessToken", accessToken);
+      sessionStorage.setItem("accessToken", accessToken);
     } else {
-      localStorage.removeItem("accessToken");
+      sessionStorage.removeItem("accessToken");
     }
   }, [accessToken]);
 
   useEffect(() => {
     if (refreshToken) {
-      localStorage.setItem("refreshToken", refreshToken);
+      sessionStorage.setItem("refreshToken", refreshToken);
     } else {
-      localStorage.removeItem("refreshToken");
+      sessionStorage.removeItem("refreshToken");
     }
   }, [refreshToken]);
 
@@ -138,7 +141,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     return await refreshAccessToken();
   };
+  const fetchSubscriptionStatus = async (): Promise<void> => {
+    console.log("Fetching subscription status...");
+    const jwt_token = getJwtToken();
 
+    if (!jwt_token) return;
+
+    try {
+      const res = await fetch(`${host}/billing/check_subscription`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${jwt_token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const { message } = await res.json();
+      console.log("Sub message is about to be set", message);
+      setSubMessage(message);
+      sessionStorage.setItem("subMessage", message);
+      return message;
+    } catch (error) {
+      console.error("Failed to fetch subscription status:", error);
+    }
+  };
   return (
     // Provide the authentication state and setter function to the context
     <AuthContext.Provider
@@ -150,6 +180,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         platform,
         setPlatform,
         getAccessToken,
+        subMessage,
+        fetchSubscriptionStatus,
       }}
     >
       {children}

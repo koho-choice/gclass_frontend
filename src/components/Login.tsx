@@ -3,7 +3,7 @@ import Modal from "react-modal";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../context/AuthContext";
 
-import { host } from "../config";
+import { host, getJwtToken } from "../config";
 
 // Set the app element for accessibility
 Modal.setAppElement("#root");
@@ -29,7 +29,8 @@ const customStyles = {
 };
 
 const Login = () => {
-  const { setIsAuthenticated, setUser, setPlatform } = useAuth();
+  const { setIsAuthenticated, setUser, setPlatform, fetchSubscriptionStatus } =
+    useAuth();
   const [selectedPlatform, setSelectedPlatform] = useState<
     "classroom" | "canvas" | "manual" | null
   >(null);
@@ -48,7 +49,10 @@ const Login = () => {
       });
 
       const data = await res.json();
-      console.log("Backend Response name:", data);
+
+      // Store the JWT token in sessionStorage
+      sessionStorage.setItem("jwtToken", data.token);
+      fetchSubscriptionStatus();
       setIsAuthenticated(true);
       setUser({
         name: data.user.name,
