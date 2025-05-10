@@ -5,7 +5,7 @@ import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { Upload, FileUp, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "./ui/alert";
-import { host, getJwtToken } from "../config";
+import { host } from "../config";
 import { useAuth } from "../context/AuthContext";
 interface Course {
   id: string;
@@ -35,21 +35,32 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
   const email = user?.email;
   const [isValidZip, setIsValidZip] = useState(false);
   const [isValidCsv, setIsValidCsv] = useState(false);
-  const token = getJwtToken();
+  const [zipError, setZipError] = useState<string | null>(null);
+  const [csvError, setCsvError] = useState<string | null>(null);
+
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     setFile: React.Dispatch<React.SetStateAction<File | null>>,
     fileType: string,
-    setIsValid: React.Dispatch<React.SetStateAction<boolean>>
+    setIsValid: React.Dispatch<React.SetStateAction<boolean>>,
+    setError: React.Dispatch<React.SetStateAction<string | null>>
   ) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      const isValidType = file.type === fileType;
+      const isValidType =
+        (fileType === "application/zip" &&
+          (file.type === "application/zip" ||
+            file.type === "application/x-zip-compressed" ||
+            file.type === "application/x-zip" ||
+            file.type === "multipart/x-zip")) ||
+        (fileType === "text/csv" && file.type === "text/csv");
+
       const isValidName =
         fileType === "application/zip"
           ? file.name.includes("submissions")
           : true;
 
+      //console.log("file.type", file.type, "file.name", file.name);
       if (!isValidType || !isValidName) {
         setError(
           `Please upload a valid ${fileType} file${
@@ -64,14 +75,7 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
 
       setFile(file);
       setIsValid(true);
-
-      // Clear error only if both files are valid
-      if (
-        (fileType === "application/zip" && isValidCsv) ||
-        (fileType === "text/csv" && isValidZip)
-      ) {
-        setError(null);
-      }
+      setError(null);
     }
   };
 
@@ -97,9 +101,6 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
       const response = await fetch(`${host}/upload_zip`, {
         method: "POST",
         body: formData,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       });
 
       if (!response.ok) {
@@ -119,7 +120,6 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
                 course_name: courseName,
@@ -226,7 +226,8 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
                         e,
                         setZipFile,
                         "application/zip",
-                        setIsValidZip
+                        setIsValidZip,
+                        setZipError
                       )
                     }
                     required
@@ -244,7 +245,13 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
                     type="file"
                     accept=".csv"
                     onChange={(e) =>
-                      handleFileChange(e, setCsvFile, "text/csv", setIsValidCsv)
+                      handleFileChange(
+                        e,
+                        setCsvFile,
+                        "text/csv",
+                        setIsValidCsv,
+                        setCsvError
+                      )
                     }
                     required
                     className="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
@@ -254,10 +261,17 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
               </div>
             </div>
 
-            {error && (
+            {zipError && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{zipError}</AlertDescription>
+              </Alert>
+            )}
+
+            {csvError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{csvError}</AlertDescription>
               </Alert>
             )}
 
