@@ -87,7 +87,7 @@ const Login = () => {
   ) => {
     setSelectedPlatform(platform);
     setPlatform(platform);
-    localStorage.setItem("platform", platform);
+    sessionStorage.setItem("platform", platform);
     login();
   };
 

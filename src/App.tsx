@@ -81,6 +81,8 @@ function App() {
   const [upgradeModalIsOpen, setUpgradeModalIsOpen] = useState(false);
   const { subMessage, fetchSubscriptionStatus } = useAuth();
 
+  const [trialModalIsOpen, setTrialModalIsOpen] = useState(false);
+
   useEffect(() => {
     // Reset state when platform changes
     setSelectedCourseId(null);
@@ -106,7 +108,10 @@ function App() {
   useEffect(() => {
     if (isAuthenticated) {
       const checkSubscription = async () => {
-        if (subMessage !== "paid") {
+        if (subMessage === "trialing") {
+          setTrialModalIsOpen(true);
+        } else if (subMessage && subMessage !== "paid") {
+          console.log("subMessage", subMessage);
           setUpgradeModalIsOpen(true);
         } else {
           setUpgradeModalIsOpen(false);
@@ -127,6 +132,8 @@ function App() {
     sessionStorage.removeItem("jwtToken");
     sessionStorage.removeItem("platform");
     sessionStorage.removeItem("subMessage");
+    setTrialModalIsOpen(false);
+    setUpgradeModalIsOpen(false);
   };
 
   const handleCoursesLoaded = () => {
@@ -321,10 +328,57 @@ function App() {
             },
           }}
         >
-          <h2 className="text-lg font-semibold mb-2">Upgrade Required</h2>
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-lg font-semibold">Upgrade Required</h2>
+            <button
+              className="text-sm text-gray-600 hover:text-gray-800"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
+          </div>
           <p className="mb-4">
             Your current subscription does not allow access. Please upgrade to
             continue.
+          </p>
+          <PortalButton />
+        </Modal>
+
+        <Modal
+          isOpen={trialModalIsOpen}
+          onRequestClose={() => setTrialModalIsOpen(false)}
+          contentLabel="Trial Expiration Modal"
+          style={{
+            content: {
+              top: "50%",
+              left: "50%",
+              right: "auto",
+              bottom: "auto",
+              marginRight: "-50%",
+              transform: "translate(-50%, -50%)",
+              padding: "20px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
+              width: "80%",
+              maxWidth: "400px",
+            },
+            overlay: {
+              backgroundColor: "rgba(0, 0, 0, 0.75)",
+            },
+          }}
+        >
+          <button
+            className="absolute top-2 right-2 text-gray-600 hover:text-gray-800"
+            onClick={() => setTrialModalIsOpen(false)}
+          >
+            &times;
+          </button>
+          <h2 className="text-lg font-semibold mb-2">
+            Trial Expiration Notice
+          </h2>
+          <p className="mb-4">
+            Your 14 day trial expires soon. Please upgrade to continue using
+            Crex after the trial.
           </p>
           <PortalButton />
         </Modal>

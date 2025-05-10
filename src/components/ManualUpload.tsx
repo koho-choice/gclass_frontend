@@ -5,7 +5,7 @@ import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { Upload, FileUp, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "./ui/alert";
-import { host } from "../config";
+import { host, getJwtToken } from "../config";
 import { useAuth } from "../context/AuthContext";
 interface Course {
   id: string;
@@ -37,7 +37,7 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
   const [isValidCsv, setIsValidCsv] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
-
+  const token = getJwtToken();
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     setFile: React.Dispatch<React.SetStateAction<File | null>>,
@@ -95,12 +95,15 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
     formData.append("points_possible", pointsPossible);
     formData.append("assignment_zip", zipFile);
     formData.append("gradebook_csv", csvFile);
-    formData.append("teacher_email", user?.email || "");
+    formData.append("teacher_email", email || "");
 
     try {
       const response = await fetch(`${host}/upload_zip`, {
         method: "POST",
         body: formData,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (!response.ok) {
@@ -120,6 +123,7 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
                 course_name: courseName,
