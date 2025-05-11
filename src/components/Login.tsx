@@ -38,7 +38,7 @@ const Login = () => {
   const [errorMessage, setErrorMessage] = useState("");
 
   const handleLoginSuccess = async (codeResponse: any) => {
-    //console.log("Authorization Code:", codeResponse.code);
+    console.log("Authorization Code:", codeResponse.code);
     try {
       const res = await fetch(`${host}/auth/google/code`, {
         method: "POST",
