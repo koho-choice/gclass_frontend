@@ -38,7 +38,7 @@ const Login = () => {
   const [errorMessage, setErrorMessage] = useState("");
 
   const handleLoginSuccess = async (codeResponse: any) => {
-    console.log("Authorization Code:", codeResponse.code);
+    //console.log("Authorization Code:", codeResponse.code);
     try {
       const res = await fetch(`${host}/auth/google/code`, {
         method: "POST",
@@ -115,8 +115,8 @@ const Login = () => {
         <button
           onClick={() => handlePlatformToggle("manual")}
           className={`inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white ${
-            selectedPlatform === "manual" ? "bg-gray-700" : "bg-gray-600"
-          } hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 shadow-sm hover:shadow-md`}
+            selectedPlatform === "manual" ? "bg-blue-700" : "bg-blue-600"
+          } hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md`}
         >
           Sign In
         </button>

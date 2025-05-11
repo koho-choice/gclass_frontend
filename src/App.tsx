@@ -152,18 +152,20 @@ function App() {
           <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between">
               <Link to="/" className="flex items-center">
-                <BookOpen className="h-8 w-8 text-indigo-600" />
+                <BookOpen className="h-8 w-8 text-blue-600" />
                 <h1 className="ml-3 text-2xl font-bold text-gray-900">
-                  Crex Classroom Assistant
+                  Crex Grader
                 </h1>
               </Link>
               {!isAuthenticated ? (
                 <Login />
               ) : (
                 <div className="flex items-center space-x-4">
-                  <div className="flex items-center text-sm">
-                    <User className="h-5 w-5 text-gray-500 mr-2" />
-                    <span className="text-gray-700">{userName}</span>
+                  <div className="flex flex-col items-end text-sm">
+                    <div className="flex items-center mb-1">
+                      <User className="h-5 w-5 text-gray-500 mr-2" />
+                      <span className="text-gray-700">{userName}</span>
+                    </div>
                     <PortalButton />
                   </div>
                   <button
@@ -186,9 +188,9 @@ function App() {
               element={
                 !isAuthenticated ? (
                   <div className="text-center py-12">
-                    <BookOpen className="mx-auto h-12 w-12 text-gray-400" />
+                    <BookOpen className="mx-auto h-12 w-12 text-blue-600" />
                     <h2 className="mt-2 text-lg font-medium text-gray-900">
-                      Welcome to Crex Classroom Assistant
+                      Welcome to Crex Grader
                     </h2>
                     <p className="mt-1 text-sm text-gray-500">
                       Sign in to get started
