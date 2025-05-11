@@ -20,7 +20,7 @@ import {
   Info,
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { host } from "../config";
+import { host, getJwtToken } from "../config";
 import { PlatformServiceFactory } from "../../services/PlatformServiceFactory";
 import { Submission } from "../../services/common";
 import { ManualUploadService } from "../../services/ManualUploadService";
@@ -75,7 +75,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const [gradingStarted, setGradingStarted] = useState(false);
   const [gradedCount, setGradedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-
+  const token = getJwtToken();
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       month: "short",
@@ -162,6 +162,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ prompt: rubricText }),
       });
@@ -195,6 +196,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
       try {
         const manualUploadService = new ManualUploadService();
         const { submission_link } = await manualUploadService.getSubmissionLink(
+          token,
           submissionId
         );
         window.open(submission_link, "_blank", "noopener,noreferrer");
@@ -283,6 +285,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
       try {
         const service = getService();
         const gradedSubmission = await service.getGradedSubmission(
+          token,
           submission_id
         );
         console.log(
@@ -369,6 +372,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
 
       const service = getService();
       const response = await service.gradeSubmission({
+        token,
         email: user?.email,
         courseId,
         assignmentId,
@@ -381,7 +385,10 @@ const Submissions: React.FC<SubmissionsProps> = ({
 
       // Function to check submission statuses
       const checkStatuses = async () => {
-        const statuses = await service.fetchSubmissionStatuses(submissionIds);
+        const statuses = await service.fetchSubmissionStatuses(
+          token,
+          submissionIds
+        );
         let newGraded = false;
 
         statuses.forEach(async ({ submission_id, status }) => {
@@ -530,7 +537,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
       setLoading(true);
 
       service
-        .getSubmissions(courseId, assignmentId, user.email)
+        .getSubmissions(token, courseId, assignmentId, user.email)
         .then((data) => {
           setSubmissionsData(data);
           setLoading(false);

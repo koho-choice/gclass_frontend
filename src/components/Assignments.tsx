@@ -10,13 +10,13 @@ import {
 } from "lucide-react";
 import { Assignment } from "../../services/common";
 import { PlatformServiceFactory } from "../../services/PlatformServiceFactory";
-
+import { getJwtToken } from "../config";
 const Assignments = ({ courseId, onAssignmentSelect }) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { user, platform } = useAuth();
-
+  const token = getJwtToken();
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       month: "short",
@@ -31,7 +31,7 @@ const Assignments = ({ courseId, onAssignmentSelect }) => {
       const service = PlatformServiceFactory.getInstance().getService(platform);
 
       service
-        .getAssignments(courseId, user?.email)
+        .getAssignments(token, courseId, user?.email)
         .then((data) => {
           setAssignments(data.assignments);
           setLoading(false);
