@@ -27,6 +27,7 @@ import { ManualUploadService } from "../../services/ManualUploadService";
 import { CanvasService } from "../../services/CanvasService";
 import { ClassroomService } from "../../services/ClassroomService";
 import mammoth from "mammoth";
+import * as pdfjsLib from "pdfjs-dist";
 
 interface SubmissionsProps {
   courseId: string;
@@ -516,6 +517,23 @@ const Submissions: React.FC<SubmissionsProps> = ({
         } catch (error) {
           console.error("Error reading .docx file:", error);
         }
+      } else if (file.type === "application/pdf") {
+        // PDF handling
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          let text = "";
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map((item: any) => item.str).join(" ") + "\n";
+          }
+          setRubricData(text);
+          console.log("Rubric Data from PDF:", text);
+          setRubricSource("uploaded");
+        } catch (error) {
+          console.error("Error reading PDF file:", error);
+        }
       } else {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -861,7 +879,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
         <input
           id="file-upload"
           type="file"
-          accept=".txt,.json,.docx" // Adjust the accepted file types as needed
+          accept=".txt,.json,.docx,.pdf" // Adjust the accepted file types as needed
           onChange={handleFileUpload}
           className="hidden"
         />
