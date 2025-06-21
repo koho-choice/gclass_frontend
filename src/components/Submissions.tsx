@@ -76,7 +76,23 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const [gradingStarted, setGradingStarted] = useState(false);
   const [gradedCount, setGradedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "info" | "error">(
+    "success"
+  );
   const token = getJwtToken();
+
+  const showToastNotification = (
+    message: string,
+    type: "success" | "info" | "error" = "success"
+  ) => {
+    setToastMessage(message);
+    setToastType(type);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 4000); // Auto-hide after 4 seconds
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       month: "short",
@@ -175,11 +191,23 @@ const Submissions: React.FC<SubmissionsProps> = ({
         setShowRubricPreview(true);
 
         setRubricSource("generated");
+        showToastNotification(
+          "✨ Rubric generated successfully! You can now grade submissions.",
+          "success"
+        );
       } else {
         console.error("Failed to generate rubric preview");
+        showToastNotification(
+          "Failed to generate rubric. Please try again.",
+          "error"
+        );
       }
     } catch (error) {
       console.error("Error generating rubric preview:", error);
+      showToastNotification(
+        "Error generating rubric. Please check your connection and try again.",
+        "error"
+      );
     } finally {
       setRubricLoading(false);
     }
@@ -514,8 +542,16 @@ const Submissions: React.FC<SubmissionsProps> = ({
           setRubricData(result.value);
           console.log("Rubric Data from .docx:", result.value);
           setRubricSource("uploaded");
+          showToastNotification(
+            "📄 Rubric uploaded successfully from Word document!",
+            "success"
+          );
         } catch (error) {
           console.error("Error reading .docx file:", error);
+          showToastNotification(
+            "Failed to read Word document. Please try again.",
+            "error"
+          );
         }
       } else if (file.type === "application/pdf") {
         // PDF handling
@@ -531,8 +567,16 @@ const Submissions: React.FC<SubmissionsProps> = ({
           setRubricData(text);
           console.log("Rubric Data from PDF:", text);
           setRubricSource("uploaded");
+          showToastNotification(
+            "📄 Rubric uploaded successfully from PDF!",
+            "success"
+          );
         } catch (error) {
           console.error("Error reading PDF file:", error);
+          showToastNotification(
+            "Failed to read PDF file. Please try again.",
+            "error"
+          );
         }
       } else {
         const reader = new FileReader();
@@ -542,6 +586,10 @@ const Submissions: React.FC<SubmissionsProps> = ({
             setRubricData(content);
             console.log("Rubric Data from file:", content);
             setRubricSource("uploaded");
+            showToastNotification(
+              "📄 Rubric uploaded successfully from text file!",
+              "success"
+            );
           }
         };
         reader.readAsText(file);
@@ -904,6 +952,36 @@ const Submissions: React.FC<SubmissionsProps> = ({
       >
         Click to add rubric
       </button>
+
+      {/* Toast Notification */}
+      {showToast && (
+        <div
+          className={`fixed top-4 right-4 z-50 flex items-center p-4 rounded-lg shadow-lg transition-all duration-300 transform ${
+            showToast
+              ? "translate-x-0 opacity-100"
+              : "translate-x-full opacity-0"
+          } ${
+            toastType === "success"
+              ? "bg-blue-500 text-white"
+              : toastType === "error"
+              ? "bg-red-500 text-white"
+              : "bg-blue-500 text-white"
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            {toastType === "success" && <CheckCircle className="h-5 w-5" />}
+            {toastType === "error" && <XCircle className="h-5 w-5" />}
+            {toastType === "info" && <Info className="h-5 w-5" />}
+            <span className="font-medium">{toastMessage}</span>
+          </div>
+          <button
+            onClick={() => setShowToast(false)}
+            className="ml-4 text-white hover:text-gray-200 transition-colors"
+          >
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

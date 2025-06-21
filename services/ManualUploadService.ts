@@ -169,4 +169,44 @@ export class ManualUploadService implements PlatformService {
     }
     return response.json();
   }
+
+  async deleteCourse(
+    token: string,
+    courseId: string,
+    email?: string
+  ): Promise<{ message: string }> {
+    const response = await fetch(
+      `${host}/manual/courses/${courseId}?teacher_email=${email}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to delete course: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async deleteAssignment(
+    token: string,
+    assignmentId: string,
+    email?: string
+  ): Promise<{ message: string }> {
+    const response = await fetch(
+      `${host}/manual/assignments/${assignmentId}?teacher_email=${email}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to delete assignment: ${response.statusText}`);
+    }
+    return response.json();
+  }
 }

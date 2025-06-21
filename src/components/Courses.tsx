@@ -6,6 +6,8 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
+  MoreVertical,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Course } from "../../services/common";
@@ -33,8 +35,10 @@ const Courses: React.FC<CoursesProps> = ({
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [totalCourses, setTotalCourses] = useState(0);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState<string | null>(null);
   const perPage = 10; // Adjust perPage as needed
-  const teacherEmail = user.email;
+  const teacherEmail = user?.email;
   const manualUploadService = new ManualUploadService();
   const token = getJwtToken();
 
@@ -51,7 +55,12 @@ const Courses: React.FC<CoursesProps> = ({
       const service = PlatformServiceFactory.getInstance().getService(platform);
 
       // Include the JWT token in the headers
-      const data = await service.getCourses(token, teacherEmail, page, perPage);
+      const data = await service.getCourses(
+        token,
+        teacherEmail || "",
+        page,
+        perPage
+      );
 
       // Process successful fetch
       setCourses(data.courses || []);
@@ -66,6 +75,8 @@ const Courses: React.FC<CoursesProps> = ({
   };
 
   const fetchTotalCoursesCount = async () => {
+    if (!teacherEmail) return;
+
     try {
       const response = await fetch(
         `${host}/courses/count?teacher_email=${teacherEmail}`,
@@ -81,6 +92,50 @@ const Courses: React.FC<CoursesProps> = ({
       console.error("Error fetching total courses count:", err);
     }
   };
+
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!teacherEmail) return;
+
+    if (
+      !confirm(
+        "Are you sure you want to delete this course? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    setDeletingCourse(courseId);
+    setOpenDropdown(null);
+
+    try {
+      await manualUploadService.deleteCourse(token, courseId, teacherEmail);
+
+      // Remove the course from the local state
+      setCourses((prevCourses) =>
+        prevCourses.filter((course) => course.id !== courseId)
+      );
+
+      // Update total courses count
+      setTotalCourses((prev) => prev - 1);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete course");
+      console.error("Error deleting course:", err);
+    } finally {
+      setDeletingCourse(null);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenDropdown(null);
+    };
+
+    if (openDropdown) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [openDropdown]);
 
   useEffect(() => {
     if (propCourses) {
@@ -152,49 +207,99 @@ const Courses: React.FC<CoursesProps> = ({
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {courses.map((course) => (
-            <button
+            <div
               key={course.id}
-              onClick={() => {
-                console.log("Selected course ID:", course.id);
-                onCourseSelect(course.id);
-              }}
-              className="card p-6 text-left hover:shadow-lg transition-all duration-200 group border border-gray-200 hover:border-indigo-300"
+              className="card p-6 text-left hover:shadow-lg transition-all duration-200 group border border-gray-200 hover:border-indigo-300 relative"
             >
               <div className="flex items-start justify-between">
-                <div className="h-10 w-10 rounded-lg bg-indigo-50 flex items-center justify-center">
-                  <GraduationCap className="h-5 w-5 text-indigo-600" />
+                <button
+                  onClick={() => {
+                    console.log("Selected course ID:", course.id);
+                    onCourseSelect(String(course.id));
+                  }}
+                  className="flex items-start justify-between w-full"
+                >
+                  <div className="h-10 w-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+                    <GraduationCap className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
+                </button>
+
+                {/* Three dots menu */}
+                <div className="relative ml-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenDropdown(
+                        openDropdown === String(course.id)
+                          ? null
+                          : String(course.id)
+                      );
+                    }}
+                    className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                    disabled={deletingCourse === String(course.id)}
+                  >
+                    {deletingCourse === String(course.id) ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                    ) : (
+                      <MoreVertical className="h-4 w-4 text-gray-500" />
+                    )}
+                  </button>
+
+                  {/* Dropdown menu */}
+                  {openDropdown === String(course.id) && (
+                    <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[120px]">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCourse(String(course.id));
+                        }}
+                        className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
               </div>
 
-              <h3 className="mt-4 font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors truncate">
-                {course.name}
-              </h3>
+              <button
+                onClick={() => {
+                  console.log("Selected course ID:", course.id);
+                  onCourseSelect(String(course.id));
+                }}
+                className="w-full text-left"
+              >
+                <h3 className="mt-4 font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors truncate">
+                  {course.name}
+                </h3>
 
-              <div className="mt-4 space-y-2">
-                {course.section && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Users className="h-4 w-4 mr-2 flex-shrink-0" />
-                    <span>Section {course.section}</span>
-                  </div>
-                )}
-                {course.room && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
-                    <span>Room {course.room}</span>
-                  </div>
-                )}
-                {/* Display course code if available */}
-                {course.course_code && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    {/* Placeholder icon or remove if none fits */}
-                    <span className="font-mono text-xs bg-gray-100 px-1 rounded">
-                      Code: {course.course_code}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </button>
+                <div className="mt-4 space-y-2">
+                  {course.section && (
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Users className="h-4 w-4 mr-2 flex-shrink-0" />
+                      <span>Section {course.section}</span>
+                    </div>
+                  )}
+                  {course.room && (
+                    <div className="flex items-center text-sm text-gray-600">
+                      <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
+                      <span>Room {course.room}</span>
+                    </div>
+                  )}
+                  {/* Display course code if available */}
+                  {(course as any).course_code && (
+                    <div className="flex items-center text-sm text-gray-600">
+                      {/* Placeholder icon or remove if none fits */}
+                      <span className="font-mono text-xs bg-gray-100 px-1 rounded">
+                        Code: {(course as any).course_code}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </button>
+            </div>
           ))}
         </div>
 
