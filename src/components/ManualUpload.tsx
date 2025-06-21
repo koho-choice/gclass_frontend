@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
-import { Upload, FileUp, AlertCircle } from "lucide-react";
+import { Upload, FileUp, AlertCircle, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "./ui/alert";
 import { host, getJwtToken } from "../config";
 import { useAuth } from "../context/AuthContext";
+import { ManualUploadService } from "../../services/ManualUploadService";
+
 interface Course {
   id: string;
   name: string;
@@ -24,6 +26,10 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
   onUploadComplete,
 }) => {
   const [courseName, setCourseName] = useState("");
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [isNewCourse, setIsNewCourse] = useState(false);
+  const [existingCourses, setExistingCourses] = useState<Course[]>([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
   const [assignmentName, setAssignmentName] = useState("");
   const [pointsPossible, setPointsPossible] = useState<number>(0.0);
   const [zipFile, setZipFile] = useState<File | null>(null);
@@ -38,6 +44,61 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
   const [zipError, setZipError] = useState<string | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
   const token = getJwtToken();
+  const manualUploadService = new ManualUploadService();
+
+  // Fetch existing courses when component mounts
+  useEffect(() => {
+    const fetchCourses = async () => {
+      if (!email) return;
+
+      setLoadingCourses(true);
+      try {
+        // First, get a reasonable number of courses to check total
+        const initialData = await manualUploadService.getCourses(
+          token,
+          email,
+          1,
+          50
+        );
+
+        let allCourses = [...initialData.courses];
+
+        // If there are more courses, fetch them in batches
+        if (initialData.total_courses > 50) {
+          const totalPages = Math.ceil(initialData.total_courses / 50);
+
+          // Fetch remaining pages
+          for (let page = 2; page <= totalPages; page++) {
+            const pageData = await manualUploadService.getCourses(
+              token,
+              email,
+              page,
+              50
+            );
+            allCourses.push(...pageData.courses);
+          }
+        }
+
+        // Convert courses to match the local interface
+        const convertedCourses: Course[] = allCourses.map((course) => ({
+          id: String(course.id),
+          name: course.name,
+          section: course.section || "",
+          room: course.room || "",
+        }));
+
+        setExistingCourses(convertedCourses);
+      } catch (err) {
+        console.error("Error fetching courses:", err);
+        // Don't show error to user, just continue with new course option
+      } finally {
+        setLoadingCourses(false);
+      }
+    };
+
+    fetchCourses();
+  }, [email, token]);
+
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     setFile: React.Dispatch<React.SetStateAction<File | null>>,
@@ -79,12 +140,37 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
     }
   };
 
+  const handleCourseSelection = (value: string) => {
+    if (value === "new_course") {
+      setIsNewCourse(true);
+      setSelectedCourseId("");
+      setCourseName("");
+    } else {
+      setIsNewCourse(false);
+      setSelectedCourseId(value);
+      const selectedCourse = existingCourses.find(
+        (course) => course.id === value
+      );
+      setCourseName(selectedCourse?.name || "");
+    }
+  };
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!zipFile || !csvFile || !courseName || !assignmentName) {
+    if (!zipFile || !csvFile || !assignmentName) {
       setError("Please fill in all fields and upload both files.");
+      return;
+    }
+
+    if (!isNewCourse && !selectedCourseId) {
+      setError("Please select a course or choose to create a new one.");
+      return;
+    }
+
+    if (isNewCourse && !courseName) {
+      setError("Please enter a course name for the new course.");
       return;
     }
 
@@ -92,7 +178,7 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
     const formData = new FormData();
     formData.append("course_name", courseName);
     formData.append("assignment_name", assignmentName);
-    formData.append("points_possible", pointsPossible);
+    formData.append("points_possible", pointsPossible.toString());
     formData.append("assignment_zip", zipFile);
     formData.append("gradebook_csv", csvFile);
     formData.append("teacher_email", email || "");
@@ -182,14 +268,41 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
           <form onSubmit={handleUpload} className="space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="courseName">Course Name</Label>
-                <Input
-                  id="courseName"
-                  placeholder="Enter course name"
-                  value={courseName}
-                  onChange={(e) => setCourseName(e.target.value)}
-                  required
-                />
+                <Label htmlFor="courseSelection">Course</Label>
+                {loadingCourses ? (
+                  <div className="text-sm text-muted-foreground">
+                    Loading courses...
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      id="courseSelection"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={isNewCourse ? "new_course" : selectedCourseId}
+                      onChange={(e) => handleCourseSelection(e.target.value)}
+                      required
+                    >
+                      <option value="">Select a course...</option>
+                      {existingCourses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.name}
+                        </option>
+                      ))}
+                      <option value="new_course">+ Create New Course</option>
+                    </select>
+
+                    {isNewCourse && (
+                      <div className="mt-2">
+                        <Input
+                          placeholder="Enter new course name"
+                          value={courseName}
+                          onChange={(e) => setCourseName(e.target.value)}
+                          required
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -265,6 +378,13 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
               </div>
             </div>
 
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
             {zipError && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -287,7 +407,8 @@ const ManualUpload: React.FC<ManualUploadProps> = ({
                 isCheckingCourseAdded ||
                 !isValidZip ||
                 !isValidCsv ||
-                (zipFile && !zipFile.name.includes("submissions"))
+                (zipFile && !zipFile.name.includes("submissions")) ||
+                loadingCourses
               }
             >
               {isUploading || isCheckingCourseAdded ? (
