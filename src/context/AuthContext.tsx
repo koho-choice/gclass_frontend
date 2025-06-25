@@ -61,7 +61,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Update sessionStorage when auth state changes
   useEffect(() => {
-    sessionStorage.setItem("isAuthenticated", isAuthenticated.toString());
+    if (isAuthenticated) {
+      sessionStorage.setItem("isAuthenticated", "true");
+    } else {
+      sessionStorage.removeItem("isAuthenticated");
+    }
   }, [isAuthenticated]);
 
   // Update sessionStorage when user data changes

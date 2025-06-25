@@ -81,6 +81,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
   const [toastType, setToastType] = useState<"success" | "info" | "error">(
     "success"
   );
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const token = getJwtToken();
 
   const showToastNotification = (
@@ -414,37 +415,53 @@ const Submissions: React.FC<SubmissionsProps> = ({
 
       // Function to check submission statuses
       const checkStatuses = async () => {
-        const statuses = await service.fetchSubmissionStatuses(
-          token,
-          submissionIds
-        );
-        let newGraded = false;
+        const maxDuration = 100 * 60 * 1000; // 100 minutes in milliseconds
+        const startTime = Date.now();
 
-        statuses.forEach(async ({ submission_id, status }) => {
-          if (!gradedList.has(submission_id)) {
-            if (status === "graded") {
-              console.log(`Submission ${submission_id} is graded.`);
-              fetchGradedSubmissionWithPolling(submission_id);
-              gradedList.add(submission_id);
-
-              newGraded = true;
-            }
+        const poll = async () => {
+          // Check if we've exceeded maximum duration
+          if (Date.now() - startTime > maxDuration) {
+            console.error("Grading timeout: Maximum polling duration exceeded");
+            setGradingInProgress(false);
+            showToastNotification(
+              "Grading took too long and timed out. Please refresh to check if any submissions were graded.",
+              "error"
+            );
+            return;
           }
-        });
 
-        // Track progress
-        const gradedCount = gradedList.size;
-        setGradedCount(gradedCount); // Update graded count
-        console.log(
-          `Graded ${gradedCount} out of ${totalSubmissions} submissions.`
-        );
+          const statuses = await service.fetchSubmissionStatuses(
+            token,
+            submissionIds
+          );
+          let newGraded = false;
 
-        if (gradedCount < totalSubmissions) {
-          setTimeout(checkStatuses, 5000); // Retry after 5 seconds
-        } else {
-          setGradingInProgress(false);
-          // No need to set totalCount here again since it's already set
-        }
+          statuses.forEach(async ({ submission_id, status }) => {
+            if (!gradedList.has(submission_id)) {
+              if (status === "graded") {
+                console.log(`Submission ${submission_id} is graded.`);
+                fetchGradedSubmissionWithPolling(submission_id);
+                gradedList.add(submission_id);
+                newGraded = true;
+              }
+            }
+          });
+
+          // Track progress
+          const gradedCount = gradedList.size;
+          setGradedCount(gradedCount);
+          console.log(
+            `Graded ${gradedCount} out of ${totalSubmissions} submissions.`
+          );
+
+          if (gradedCount < totalSubmissions) {
+            setTimeout(poll, 5000); // Retry after 5 seconds
+          } else {
+            setGradingInProgress(false);
+          }
+        };
+
+        poll(); // Start the polling
       };
 
       // Start checking statuses
@@ -666,7 +683,14 @@ const Submissions: React.FC<SubmissionsProps> = ({
             {rubricData && (
               <span
                 className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-green-100 text-green-800 cursor-pointer"
-                onClick={() => setRubricData(null)}
+                onClick={() => {
+                  setRubricData(null);
+                  setRubricSource(null);
+                  // Clear the file input value so the same file can be uploaded again
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
               >
                 Rubric provided. Click to remove.
               </span>
@@ -677,8 +701,13 @@ const Submissions: React.FC<SubmissionsProps> = ({
         <div className="flex items-center space-x-4">
           {selectedSubmissions.size > 0 && (
             <button
-              onClick={handleGradeSubmissions}
-              className="inline-flex items-center px-4 py-2 rounded-lg bg-green-600 text-white font-medium text-sm hover:bg-green-700 transition-colors"
+              onClick={gradingInProgress ? undefined : handleGradeSubmissions}
+              disabled={gradingInProgress || !rubricData}
+              className={`inline-flex items-center px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                gradingInProgress || !rubricData
+                  ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
             >
               {gradingInProgress
                 ? `Now grading ${selectedSubmissions.size} assignments`
@@ -930,6 +959,7 @@ const Submissions: React.FC<SubmissionsProps> = ({
           accept=".txt,.json,.docx,.pdf" // Adjust the accepted file types as needed
           onChange={handleFileUpload}
           className="hidden"
+          ref={fileInputRef}
         />
       </div>
       <textarea

@@ -126,7 +126,6 @@ function App() {
     setGradingStatus("pending");
     setSelectedCourseId(null);
     setSelectedAssignmentId(null);
-    sessionStorage.removeItem("isAuthenticated");
     sessionStorage.removeItem("user");
     setIsManualUploadVisible(false);
     sessionStorage.removeItem("jwtToken");
