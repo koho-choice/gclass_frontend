@@ -57,7 +57,14 @@ type Submission = {
 type GradingStatus = "pending" | "inProgress" | "completed";
 
 function App() {
-  const { isAuthenticated, setIsAuthenticated, user, platform } = useAuth();
+  const {
+    isAuthenticated,
+    setIsAuthenticated,
+    user,
+    platform,
+    subMessage,
+    setSubMessage,
+  } = useAuth();
   // get the user name
   const userName = user?.name;
   const email = user?.email;
@@ -79,7 +86,7 @@ function App() {
   const [coursesRefreshTrigger, setCoursesRefreshTrigger] = useState<number>(0);
 
   const [upgradeModalIsOpen, setUpgradeModalIsOpen] = useState(false);
-  const { subMessage, fetchSubscriptionStatus } = useAuth();
+  const { fetchSubscriptionStatus } = useAuth();
 
   const [trialModalIsOpen, setTrialModalIsOpen] = useState(false);
 
@@ -131,6 +138,7 @@ function App() {
     sessionStorage.removeItem("jwtToken");
     sessionStorage.removeItem("platform");
     sessionStorage.removeItem("subMessage");
+    setSubMessage(null); // Add this line to reset the subscription message state
     setTrialModalIsOpen(false);
     setUpgradeModalIsOpen(false);
   };

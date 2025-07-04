@@ -27,6 +27,7 @@ interface AuthContextType {
   setPlatform: (platform: Platform) => void;
   getAccessToken: () => Promise<string | null>;
   subMessage: string | null;
+  setSubMessage: (value: string | null) => void; // Add this line
   fetchSubscriptionStatus: () => Promise<void>;
 }
 
@@ -186,6 +187,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         getAccessToken,
         subMessage,
         fetchSubscriptionStatus,
+        setSubMessage,
       }}
     >
       {children}
